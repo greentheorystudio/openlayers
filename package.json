@@ -1,13 +1,13 @@
 {
-  "name": "ol",
+  "name": "@greentheorystudio/ol",
   "version": "6.2.2",
-  "description": "OpenLayers mapping library",
+  "description": "Green Theory Studio OpenLayers mapping library fork",
   "keywords": [
     "map",
     "mapping",
     "ol"
   ],
-  "private": true,
+  "private": false,
   "homepage": "https://openlayers.org/",
   "scripts": {
     "lint": "eslint tasks test rendering src/ol examples config",
@@ -29,11 +29,11 @@
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git://github.com/openlayers/openlayers.git"
+    "url": "git://github.com/greentheorystudio/openlayers.git"
   },
   "license": "BSD-2-Clause",
   "bugs": {
-    "url": "https://github.com/openlayers/openlayers/issues"
+    "url": "https://github.com/greentheorystudio/openlayers/issues"
   },
   "dependencies": {
     "elm-pep": "^1.0.4",
