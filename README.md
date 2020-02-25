@@ -4,10 +4,10 @@
 
 ## Getting Started
 
-Install the [`ol` package](https://www.npmjs.com/package/ol):
+Install the [`@greentheorystudio/ol` package](https://www.npmjs.com/package/@greentheorystudio/ol):
 
 ```
-npm install ol
+npm install @greentheorystudio/ol
 ```
 
 Import just what you need for your application:
