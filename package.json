@@ -1,6 +1,6 @@
 {
-  "name": "gts-gtsol-test",
-  "version": "6.2.2",
+  "name": "@greentheorystudio/ol",
+  "version": "6.2.4",
   "description": "Green Theory Studio OpenLayers mapping library fork",
   "keywords": [
     "map",
