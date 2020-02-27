@@ -1,6 +1,6 @@
 {
   "name": "@greentheorystudio/ol",
-  "version": "6.2.4",
+  "version": "6.2.5",
   "description": "Green Theory Studio OpenLayers mapping library fork",
   "keywords": [
     "map",
@@ -18,10 +18,11 @@
     "start": "npm run serve-examples",
     "serve-examples": "webpack-dev-server --config examples/webpack/config.js --mode development --watch",
     "build-examples": "webpack --config examples/webpack/config.js --mode production",
-    "build-package": "npm run transpile && npm run copy-css && node tasks/prepare-package && shx cp README.md build/ol",
+    "build-package": "npm run transpile && npm run copy-css && node tasks/prepare-package && shx cp README.md build/ol && npm run copy-package-json",
     "build-index": "npm run build-package && node tasks/generate-index",
     "build-legacy": "shx rm -rf build && npm run build-index && webpack --config config/webpack-config-legacy-build.js && cleancss --source-map src/ol/ol.css -o build/legacy/ol.css",
     "copy-css": "shx cp src/ol/ol.css build/ol/ol.css",
+    "copy-package-json": "shx cp package.json build/ol/package.json",
     "transpile": "shx rm -rf build/ol && shx mkdir -p build/ol && shx cp -rf src/ol build/ol/src && node tasks/serialize-workers && npx --package typescript@3.8.1-rc tsc --project config/tsconfig-build.json",
     "typecheck": "tsc --pretty",
     "apidoc": "shx rm -rf build/apidoc && jsdoc -R config/jsdoc/api/index.md -c config/jsdoc/api/conf.json -P package.json -d build/apidoc"
@@ -37,6 +38,7 @@
   },
   "dependencies": {
     "elm-pep": "^1.0.4",
+    "find-remove": "^2.0.1",
     "pbf": "3.2.1",
     "pixelworks": "1.1.0",
     "rbush": "^3.0.1"
