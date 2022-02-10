@@ -3,7 +3,8 @@ import fse from 'fs-extra';
 import path, {dirname} from 'path';
 import {fileURLToPath} from 'url';
 import {spawn} from 'child_process';
-import {walk} from 'walk';
+import pkg from 'walk/lib/walk.js';
+const { walk } = pkg;
 
 const isWindows = process.platform.indexOf('win') === 0;
 const baseDir = dirname(fileURLToPath(import.meta.url));
