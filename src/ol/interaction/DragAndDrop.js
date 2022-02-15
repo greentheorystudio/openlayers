@@ -181,6 +181,13 @@ class DragAndDrop extends Interaction {
   handleResult_(file, event) {
     const result = event.target.result;
     const map = this.getMap();
+    const filename = file.name.split('.');
+    const fileType = filename.pop();
+    if (fileType === 'zip' || fileType === 'tif') {
+      this.dispatchEvent(
+        new DragAndDropEvent(DragAndDropEventType.ADD_FEATURES, file)
+      );
+    }
     let projection = this.projection_;
     if (!projection) {
       const view = map.getView();
