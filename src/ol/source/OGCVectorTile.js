@@ -2,9 +2,9 @@
  * @module ol/source/OGCVectorTile
  */
 
-import SourceState from './State.js';
-import VectorTile from './VectorTile.js';
+import VectorTileSource from './VectorTile.js';
 import {getTileSetInfo} from './ogcTileUtil.js';
+import {error as logError} from '../console.js';
 
 /**
  * @typedef {Object} Options
@@ -23,7 +23,7 @@ import {getTileSetInfo} from './ogcTileUtil.js';
  * stroke operations.
  * @property {import("../proj.js").ProjectionLike} [projection='EPSG:3857'] Projection of the tile grid.
  * @property {typeof import("../VectorTile.js").default} [tileClass] Class used to instantiate image tiles.
- * Default is {@link module:ol/VectorTile}.
+ * Default is {@link module:ol/VectorTile~VectorTile}.
  * @property {number} [transition] A duration for tile opacity
  * transitions in milliseconds. A duration of 0 disables the opacity transition.
  * @property {boolean} [wrapX=true] Whether to wrap the world horizontally.
@@ -44,8 +44,9 @@ import {getTileSetInfo} from './ogcTileUtil.js';
  * Vector tile sets may come in a variety of formats (e.g. GeoJSON, MVT).  The `format` option is used to determine
  * which of the advertised media types is used.  If you need to force the use of a particular media type, you can
  * provide the `mediaType` option.
+ * @api
  */
-class OGCVectorTile extends VectorTile {
+class OGCVectorTile extends VectorTileSource {
   /**
    * @param {Options} options OGC vector tile options.
    */
@@ -61,7 +62,7 @@ class OGCVectorTile extends VectorTile {
       transition: options.transition,
       wrapX: options.wrapX,
       zDirection: options.zDirection,
-      state: SourceState.LOADING,
+      state: 'loading',
     });
 
     const sourceInfo = {
@@ -84,7 +85,7 @@ class OGCVectorTile extends VectorTile {
   handleTileSetInfo_(tileSetInfo) {
     this.tileGrid = tileSetInfo.grid;
     this.setTileUrlFunction(tileSetInfo.urlFunction, tileSetInfo.urlTemplate);
-    this.setState(SourceState.READY);
+    this.setState('ready');
   }
 
   /**
@@ -92,8 +93,8 @@ class OGCVectorTile extends VectorTile {
    * @param {Error} error The error.
    */
   handleError_(error) {
-    console.error(error); // eslint-disable-line no-console
-    this.setState(SourceState.ERROR);
+    logError(error);
+    this.setState('error');
   }
 }
 

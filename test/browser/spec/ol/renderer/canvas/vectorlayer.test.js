@@ -1,11 +1,7 @@
 import CanvasVectorLayerRenderer from '../../../../../../src/ol/renderer/canvas/VectorLayer.js';
-import Circle from '../../../../../../src/ol/geom/Circle.js';
-import CircleStyle from '../../../../../../src/ol/style/Circle.js';
 import Feature from '../../../../../../src/ol/Feature.js';
-import Fill from '../../../../../../src/ol/style/Fill.js';
 import Map from '../../../../../../src/ol/Map.js';
 import Point from '../../../../../../src/ol/geom/Point.js';
-import Stroke from '../../../../../../src/ol/style/Stroke.js';
 import Style from '../../../../../../src/ol/style/Style.js';
 import Text from '../../../../../../src/ol/style/Text.js';
 import VectorLayer from '../../../../../../src/ol/layer/Vector.js';
@@ -18,15 +14,19 @@ import {
   getWidth,
 } from '../../../../../../src/ol/extent.js';
 import {checkedFonts} from '../../../../../../src/ol/render/canvas.js';
-import {fromExtent} from '../../../../../../src/ol/geom/Polygon.js';
+import {createFontStyle} from '../../../util.js';
 import {get as getProjection} from '../../../../../../src/ol/proj.js';
 
-describe('ol.renderer.canvas.VectorLayer', function () {
+describe('ol/renderer/canvas/VectorLayer', function () {
   describe('constructor', function () {
-    const head = document.getElementsByTagName('head')[0];
-    const font = document.createElement('link');
-    font.href = 'https://fonts.googleapis.com/css?family=Droid+Sans';
-    font.rel = 'stylesheet';
+    const fontFamily = 'Ubuntu - VectorLayerTest';
+    const font = createFontStyle({
+      fontFamily: fontFamily,
+      src: {
+        url: '/spec/ol/data/fonts/ubuntu-regular-webfont.woff2',
+        format: 'woff2',
+      },
+    });
 
     let target;
 
@@ -87,7 +87,7 @@ describe('ol.renderer.canvas.VectorLayer', function () {
       map.addLayer(layer);
       const spy = sinon.spy(layer.getRenderer(), 'renderFeature');
       map.renderSync();
-      expect(spy.getCall(0).args[2]).to.be(layerStyle);
+      expect(spy.getCall(0).args[2]).to.eql(layerStyle);
       expect(spy.getCall(1).args[2]).to.be(featureStyle);
       document.body.removeChild(target);
     });
@@ -156,7 +156,7 @@ describe('ol.renderer.canvas.VectorLayer', function () {
 
     it('re-renders for fonts that become available', function (done) {
       checkedFonts.values_ = {};
-      head.appendChild(font);
+      font.add();
       const map = new Map({
         view: new View({
           center: [0, 0],
@@ -167,7 +167,7 @@ describe('ol.renderer.canvas.VectorLayer', function () {
       const layerStyle = new Style({
         text: new Text({
           text: 'layer',
-          font: '12px "Droid Sans",sans-serif',
+          font: `12px "${fontFamily}",sans-serif`,
         }),
       });
 
@@ -181,9 +181,13 @@ describe('ol.renderer.canvas.VectorLayer', function () {
       map.addLayer(layer);
       const revision = layer.getRevision();
       setTimeout(function () {
-        expect(layer.getRevision()).to.be(revision + 1);
-        head.removeChild(font);
-        done();
+        try {
+          font.remove();
+          expect(layer.getRevision()).to.be(revision + 1);
+          done();
+        } catch (e) {
+          done(e);
+        }
       }, 1600);
     });
   });
@@ -239,12 +243,12 @@ describe('ol.renderer.canvas.VectorLayer', function () {
   });
 
   describe('#prepareFrame and #compose', function () {
-    /** @type {import("../../../../../../src/ol/PluggableMap").FrameState*/ let frameState;
-    /** @type {import("../../../../../../src/ol/extent").Extent*/ let projExtent;
+    /** @type {import("../../../../../../src/ol/Map").FrameState} */ let frameState;
+    /** @type {import("../../../../../../src/ol/extent").Extent} */ let projExtent;
     /** @type {CanvasVectorLayerRenderer} */ let renderer;
     /** @type {number} */ let worldWidth;
     /** @type {number} */ let buffer;
-    /** @type {Array<import("../../../../../../src/ol/extent").Extent>*/ let loadExtents;
+    /** @type {Array<import("../../../../../../src/ol/extent").Extent>} */ let loadExtents;
 
     function loader(extent) {
       loadExtents.push(extent);
@@ -409,239 +413,39 @@ describe('ol.renderer.canvas.VectorLayer', function () {
       expect(renderer.replayGroupChanged).to.be(false);
     });
 
-    it('dispatches a postrender event when rendering', function (done) {
+    it('dispatches a postrender event when rendering', function () {
       const layer = renderer.getLayer();
       layer.getSource().addFeature(new Feature(new Point([0, 0])));
-      layer.once('postrender', function () {
-        expect(true);
-        done();
-      });
+      const postrenderSpy = sinon.spy();
+      layer.once('postrender', postrenderSpy);
       frameState.layerStatesArray = [layer.getLayerState()];
       frameState.layerIndex = 0;
       frameState.size = [100, 100];
       setExtent([-10000, -10000, 10000, 10000]);
-      let rendered = false;
+      let container = null;
       if (renderer.prepareFrame(frameState)) {
-        rendered = true;
-        renderer.renderFrame(frameState, null);
+        container = renderer.renderFrame(frameState, null);
       }
-      expect(rendered).to.be(true);
+      expect(postrenderSpy.callCount).to.be(1);
+      expect(container).to.not.be(null);
+    });
+    it('renders an empty source if a postrender event listener is added', function () {
+      const layer = renderer.getLayer();
+      const postrenderSpy = sinon.spy();
+      layer.once('postrender', postrenderSpy);
+      frameState.layerStatesArray = [layer.getLayerState()];
+      frameState.layerIndex = 0;
+      frameState.size = [100, 100];
+      setExtent([-10000, -10000, 10000, 10000]);
+      let container = null;
+      if (renderer.prepareFrame(frameState)) {
+        container = renderer.renderFrame(frameState, null);
+      }
+      expect(container).to.not.be(null);
     });
   });
 
   describe('hit detection', function () {
-    it('with no fill and transparent fill', function () {
-      const target = document.createElement('div');
-      target.style.width = '300px';
-      target.style.height = '300px';
-      document.body.appendChild(target);
-      const styles = {
-        transparent: new Style({
-          stroke: new Stroke({
-            color: 'blue',
-            width: 3,
-          }),
-          fill: new Fill({
-            color: 'transparent',
-          }),
-          image: new CircleStyle({
-            radius: 30,
-            stroke: new Stroke({
-              color: 'blue',
-              width: 3,
-            }),
-            fill: new Fill({
-              color: 'transparent',
-            }),
-          }),
-        }),
-        none: new Style({
-          stroke: new Stroke({
-            color: 'blue',
-            width: 3,
-          }),
-          image: new CircleStyle({
-            radius: 30,
-            stroke: new Stroke({
-              color: 'blue',
-              width: 3,
-            }),
-          }),
-        }),
-      };
-      const source = new VectorSource({
-        features: [
-          new Feature({
-            geometry: fromExtent([0, 10, 3, 13]),
-            fillType: 'none',
-          }),
-          new Feature({
-            geometry: fromExtent([1, 11, 4, 14]),
-            fillType: 'none',
-          }),
-          new Feature({
-            geometry: fromExtent([5, 10, 8, 13]),
-            fillType: 'transparent',
-          }),
-          new Feature({
-            geometry: fromExtent([6, 11, 9, 14]),
-            fillType: 'transparent',
-          }),
-          new Feature({
-            geometry: new Circle([1.5, 6.5], 1.5),
-            fillType: 'none',
-          }),
-          new Feature({
-            geometry: new Circle([2.5, 7.5], 1.5),
-            fillType: 'none',
-          }),
-          new Feature({
-            geometry: new Circle([6.5, 6.5], 1.5),
-            fillType: 'transparent',
-          }),
-          new Feature({
-            geometry: new Circle([7.5, 7.5], 1.5),
-            fillType: 'transparent',
-          }),
-          new Feature({
-            geometry: new Point([1.5, 1.5]),
-            fillType: 'none',
-          }),
-          new Feature({
-            geometry: new Point([2.5, 2.5]),
-            fillType: 'none',
-          }),
-          new Feature({
-            geometry: new Point([6.5, 1.5]),
-            fillType: 'transparent',
-          }),
-          new Feature({
-            geometry: new Point([7.5, 2.5]),
-            fillType: 'transparent',
-          }),
-        ],
-      });
-      const layer = new VectorLayer({
-        source: source,
-        style: function (feature, resolution) {
-          return styles[feature.get('fillType')];
-        },
-      });
-      const map = new Map({
-        layers: [layer],
-        view: new View({
-          center: [4.5, 7],
-          resolution: 0.05,
-        }),
-        target: target,
-      });
-      map.renderSync();
-
-      function hitTest(coordinate) {
-        const features = map.getFeaturesAtPixel(
-          map.getPixelFromCoordinate(coordinate)
-        );
-        const result = {count: 0};
-        if (features && features.length > 0) {
-          result.count = features.length;
-          result.extent = features[0].getGeometry().getExtent();
-        }
-        return result;
-      }
-      let res;
-
-      res = hitTest([0, 12]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(0);
-      res = hitTest([1, 12]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(1);
-      res = hitTest([2, 12]);
-      expect(res.count).to.be(0);
-      res = hitTest([3, 12]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(0);
-      res = hitTest([4, 12]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(1);
-      res = hitTest([5, 12]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(5);
-      res = hitTest([6, 12]);
-      expect(res.count).to.be(2);
-      expect(res.extent[0]).to.be(6);
-      res = hitTest([7, 12]);
-      expect(res.count).to.be(2);
-      expect(res.extent[0]).to.be(6);
-      res = hitTest([8, 12]);
-      expect(res.count).to.be(2);
-      expect(res.extent[0]).to.be(6);
-      res = hitTest([9, 12]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(6);
-
-      res = hitTest([0, 6.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(0);
-      res = hitTest([1, 7.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(1);
-      res = hitTest([2, 7.0]);
-      expect(res.count).to.be(0);
-      res = hitTest([3, 6.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(0);
-      res = hitTest([4, 7.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(1);
-      res = hitTest([5, 6.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(5);
-      res = hitTest([6, 7.5]);
-      expect(res.count).to.be(2);
-      expect(res.extent[0]).to.be(6);
-      res = hitTest([7, 7.0]);
-      expect(res.count).to.be(2);
-      expect(res.extent[0]).to.be(6);
-      res = hitTest([8, 6.5]);
-      expect(res.count).to.be(2);
-      expect(res.extent[0]).to.be(6);
-      res = hitTest([9, 7.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(6);
-
-      res = hitTest([0, 1.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(1.5);
-      res = hitTest([1, 2.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(2.5);
-      res = hitTest([2, 2.0]);
-      expect(res.count).to.be(0);
-      res = hitTest([3, 1.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(1.5);
-      res = hitTest([4, 2.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(2.5);
-      res = hitTest([5, 1.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(6.5);
-      res = hitTest([6, 2.5]);
-      expect(res.count).to.be(2);
-      expect(res.extent[0]).to.be(7.5);
-      res = hitTest([7, 2.0]);
-      expect(res.count).to.be(2);
-      expect(res.extent[0]).to.be(7.5);
-      res = hitTest([8, 1.5]);
-      expect(res.count).to.be(2);
-      expect(res.extent[0]).to.be(7.5);
-      res = hitTest([9, 2.5]);
-      expect(res.count).to.be(1);
-      expect(res.extent[0]).to.be(7.5);
-
-      document.body.removeChild(target);
-    });
     it('invalidates hitdetection image when map is moved horizontally', function (done) {
       const layer = new VectorLayer({
         source: new VectorSource({
@@ -652,7 +456,7 @@ describe('ol.renderer.canvas.VectorLayer', function () {
       const projection = getProjection('EPSG:3857');
       const projExtent = projection.getExtent();
       const worldWidth = getWidth(projExtent);
-      /** @type {import("../../../../../../src/ol/PluggableMap").FrameState*/
+      /** @type {import("../../../../../../src/ol/Map").FrameState} */
       const frameState = {
         viewHints: [],
         pixelRatio: 1,
@@ -699,6 +503,7 @@ describe('ol.renderer.canvas.VectorLayer', function () {
       }
     });
   });
+
   describe('renderFrame', function () {
     const projection = getProjection('EPSG:3857');
     let renderer;

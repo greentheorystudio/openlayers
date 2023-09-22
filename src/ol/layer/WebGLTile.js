@@ -3,7 +3,6 @@
  */
 import BaseTileLayer from './BaseTile.js';
 import LayerProperty from '../layer/Property.js';
-import SourceState from '../source/State.js';
 import WebGLTileLayerRenderer, {
   Attributes,
   Uniforms,
@@ -15,7 +14,6 @@ import {
   getStringNumberEquivalent,
   uniformNameForVariable,
 } from '../style/expressions.js';
-import {assign} from '../obj.js';
 
 /**
  * @typedef {import("../source/DataTile.js").default|import("../source/TileImage.js").default} SourceType
@@ -69,11 +67,11 @@ import {assign} from '../obj.js';
  * of sources for this layer. Takes precedence over `source`. Can either be an array of sources, or a function that
  * expects an extent and a resolution (in view projection units per pixel) and returns an array of sources. See
  * {@link module:ol/source.sourcesFromTileGrid} for a helper function to generate sources that are organized in a
- * pyramid following the same pattern as a tile grid.
- * @property {import("../PluggableMap.js").default} [map] Sets the layer as overlay on a map. The map will not manage
+ * pyramid following the same pattern as a tile grid. **Note:** All sources must have the same band count and content.
+ * @property {import("../Map.js").default} [map] Sets the layer as overlay on a map. The map will not manage
  * this layer in its layers collection, and the layer will be rendered on top. This is useful for
  * temporary layers. The standard way to add a layer to a map and have it managed by the map is to
- * use {@link module:ol/Map#addLayer}.
+ * use {@link module:ol/Map~Map#addLayer}.
  * @property {boolean} [useInterimTilesOnError=true] Use interim tiles on error.
  * @property {number} [cacheSize=512] The internal texture cache size.  This needs to be large enough to render
  * two zoom levels worth of tiles.
@@ -123,9 +121,9 @@ function parseStyle(style, bandCount) {
     inFragmentShader: true,
     variables: [],
     attributes: [],
-    stringLiteralsMap: {},
     functions: {},
     bandCount: bandCount,
+    style: style,
   };
 
   const pipeline = [];
@@ -204,15 +202,15 @@ function parseStyle(style, bandCount) {
   }
 
   for (let i = 0; i < numVariables; ++i) {
-    const variableName = context.variables[i];
-    if (!(variableName in style.variables)) {
-      throw new Error(`Missing '${variableName}' in style variables`);
+    const variable = context.variables[i];
+    if (!(variable.name in style.variables)) {
+      throw new Error(`Missing '${variable.name}' in style variables`);
     }
-    const uniformName = uniformNameForVariable(variableName);
+    const uniformName = uniformNameForVariable(variable.name);
     uniforms[uniformName] = function () {
-      let value = style.variables[variableName];
+      let value = style.variables[variable.name];
       if (typeof value === 'string') {
-        value = getStringNumberEquivalent(context, value);
+        value = getStringNumberEquivalent(value);
       }
       return value !== undefined ? value : -9999999; // to avoid matching with the first string literal
     };
@@ -275,10 +273,6 @@ function parseStyle(style, bandCount) {
 
       ${pipeline.join('\n')}
 
-      if (color.a == 0.0) {
-        discard;
-      }
-
       gl_FragColor = color;
       gl_FragColor.rgb *= gl_FragColor.a;
       gl_FragColor *= ${Uniforms.TRANSITION_ALPHA};
@@ -301,14 +295,15 @@ function parseStyle(style, bandCount) {
  * options means that `title` is observable, and has get/set accessors.
  *
  * @extends BaseTileLayer<SourceType, WebGLTileLayerRenderer>
+ * @fires import("../render/Event.js").RenderEvent
  * @api
  */
 class WebGLTileLayer extends BaseTileLayer {
   /**
-   * @param {Options} opt_options Tile layer options.
+   * @param {Options} options Tile layer options.
    */
-  constructor(opt_options) {
-    const options = opt_options ? assign({}, opt_options) : {};
+  constructor(options) {
+    options = options ? Object.assign({}, options) : {};
 
     const style = options.style || {};
     delete options.style;
@@ -323,6 +318,12 @@ class WebGLTileLayer extends BaseTileLayer {
      * @private
      */
     this.sources_ = options.sources;
+
+    /**
+     * @type {SourceType|null}
+     * @private
+     */
+    this.renderedSource_ = null;
 
     /**
      * @type {number}
@@ -372,24 +373,24 @@ class WebGLTileLayer extends BaseTileLayer {
    * @return {SourceType} The source being rendered.
    */
   getRenderSource() {
-    return (
-      /** @type {SourceType} */ (this.getLayerState().source) ||
-      this.getSource()
-    );
+    return this.renderedSource_ || this.getSource();
   }
 
   /**
-   * @return {import("../source/State.js").default} Source state.
+   * @return {import("../source/Source.js").State} Source state.
    */
   getSourceState() {
     const source = this.getRenderSource();
-    return source ? source.getState() : SourceState.UNDEFINED;
+    return source ? source.getState() : 'undefined';
   }
 
   /**
    * @private
    */
   handleSourceUpdate_() {
+    if (this.hasRenderer()) {
+      this.getRenderer().clearCache();
+    }
     if (this.getSource()) {
       this.setStyle(this.style_);
     }
@@ -400,8 +401,11 @@ class WebGLTileLayer extends BaseTileLayer {
    * @return {number} The number of source bands.
    */
   getSourceBandCount_() {
-    const source = this.getSource();
-    return source && 'bandCount' in source ? source.bandCount : 4;
+    const max = Number.MAX_SAFE_INTEGER;
+    const sources = this.getSources([-max, -max, max, max], max);
+    return sources && sources.length && 'bandCount' in sources[0]
+      ? sources[0].bandCount
+      : 4;
   }
 
   createRenderer() {
@@ -417,7 +421,7 @@ class WebGLTileLayer extends BaseTileLayer {
   }
 
   /**
-   * @param {import("../PluggableMap").FrameState} frameState Frame state.
+   * @param {import("../Map").FrameState} frameState Frame state.
    * @param {Array<SourceType>} sources Sources.
    * @return {HTMLElement} Canvas.
    */
@@ -425,7 +429,7 @@ class WebGLTileLayer extends BaseTileLayer {
     const layerRenderer = this.getRenderer();
     let canvas;
     for (let i = 0, ii = sources.length; i < ii; ++i) {
-      this.getLayerState().source = sources[i];
+      this.renderedSource_ = sources[i];
       if (layerRenderer.prepareFrame(frameState)) {
         canvas = layerRenderer.renderFrame(frameState);
       }
@@ -434,7 +438,7 @@ class WebGLTileLayer extends BaseTileLayer {
   }
 
   /**
-   * @param {?import("../PluggableMap.js").FrameState} frameState Frame state.
+   * @param {?import("../Map.js").FrameState} frameState Frame state.
    * @param {HTMLElement} target Target which the renderer may (but need not) use
    * for rendering its content.
    * @return {HTMLElement} The rendered element.
@@ -447,16 +451,16 @@ class WebGLTileLayer extends BaseTileLayer {
     for (let i = 0, ii = sources.length; i < ii; ++i) {
       const source = sources[i];
       const sourceState = source.getState();
-      if (sourceState == SourceState.LOADING) {
+      if (sourceState == 'loading') {
         const onChange = () => {
-          if (source.getState() == SourceState.READY) {
+          if (source.getState() == 'ready') {
             source.removeEventListener('change', onChange);
             this.changed();
           }
         };
         source.addEventListener('change', onChange);
       }
-      ready = ready && sourceState == SourceState.READY;
+      ready = ready && sourceState == 'ready';
     }
     const canvas = this.renderSources(frameState, sources);
     if (this.getRenderer().renderComplete && ready) {
@@ -505,7 +509,7 @@ class WebGLTileLayer extends BaseTileLayer {
    * @api
    */
   updateStyleVariables(variables) {
-    assign(this.styleVariables_, variables);
+    Object.assign(this.styleVariables_, variables);
     this.changed();
   }
 }

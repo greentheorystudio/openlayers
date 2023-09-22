@@ -21,7 +21,6 @@ import {
 } from '../xml.js';
 import {and as andFilterFn, bbox as bboxFilterFn} from './filter.js';
 import {assert} from '../asserts.js';
-import {assign} from '../obj.js';
 import {get as getProjection} from '../proj.js';
 import {
   readNonNegativeIntegerString,
@@ -36,7 +35,7 @@ import {
 const FEATURE_COLLECTION_PARSERS = {
   'http://www.opengis.net/gml': {
     'boundedBy': makeObjectPropertySetter(
-      GMLBase.prototype.readGeometryElement,
+      GMLBase.prototype.readExtentElement,
       'bounds'
     ),
   },
@@ -148,9 +147,9 @@ const TRANSACTION_SERIALIZERS = {
  * @property {import("../extent.js").Extent} [bbox] Extent to use for the BBOX filter. The `geometryName`
  * option must be set.
  * @property {import("./filter/Filter.js").default} [filter] Filter condition. See
- * {@link module:ol/format/Filter} for more information.
+ * {@link module:ol/format/filter} for more information.
  * @property {string} [resultType] Indicates what response should be returned,
- * E.g. `hits` only includes the `numberOfFeatures` attribute in the response and no features.
+ * e.g. `hits` only includes the `numberOfFeatures` attribute in the response and no features.
  */
 
 /**
@@ -266,12 +265,12 @@ const DEFAULT_VERSION = '1.1.0';
  */
 class WFS extends XMLFeature {
   /**
-   * @param {Options} [opt_options] Optional configuration object.
+   * @param {Options} [options] Optional configuration object.
    */
-  constructor(opt_options) {
+  constructor(options) {
     super();
 
-    const options = opt_options ? opt_options : {};
+    options = options ? options : {};
 
     /**
      * @private
@@ -325,20 +324,20 @@ class WFS extends XMLFeature {
   /**
    * @protected
    * @param {Element} node Node.
-   * @param {import("./Feature.js").ReadOptions} [opt_options] Options.
+   * @param {import("./Feature.js").ReadOptions} [options] Options.
    * @return {Array<import("../Feature.js").default>} Features.
    */
-  readFeaturesFromNode(node, opt_options) {
+  readFeaturesFromNode(node, options) {
     /** @type {import("../xml.js").NodeStackItem} */
     const context = {
       node,
     };
-    assign(context, {
+    Object.assign(context, {
       'featureType': this.featureType_,
       'featureNS': this.featureNS_,
     });
 
-    assign(context, this.getReadOptions(node, opt_options ? opt_options : {}));
+    Object.assign(context, this.getReadOptions(node, options ? options : {}));
     const objectStack = [context];
     let featuresNS;
     if (this.version_ === '2.0.0') {
@@ -369,18 +368,19 @@ class WFS extends XMLFeature {
   readTransactionResponse(source) {
     if (!source) {
       return undefined;
-    } else if (typeof source === 'string') {
+    }
+    if (typeof source === 'string') {
       const doc = parse(source);
       return this.readTransactionResponseFromDocument(doc);
-    } else if (isDocument(source)) {
+    }
+    if (isDocument(source)) {
       return this.readTransactionResponseFromDocument(
         /** @type {Document} */ (source)
       );
-    } else {
-      return this.readTransactionResponseFromNode(
-        /** @type {Element} */ (source)
-      );
     }
+    return this.readTransactionResponseFromNode(
+      /** @type {Element} */ (source)
+    );
   }
 
   /**
@@ -394,18 +394,19 @@ class WFS extends XMLFeature {
   readFeatureCollectionMetadata(source) {
     if (!source) {
       return undefined;
-    } else if (typeof source === 'string') {
+    }
+    if (typeof source === 'string') {
       const doc = parse(source);
       return this.readFeatureCollectionMetadataFromDocument(doc);
-    } else if (isDocument(source)) {
+    }
+    if (isDocument(source)) {
       return this.readFeatureCollectionMetadataFromDocument(
         /** @type {Document} */ (source)
       );
-    } else {
-      return this.readFeatureCollectionMetadataFromNode(
-        /** @type {Element} */ (source)
-      );
     }
+    return this.readFeatureCollectionMetadataFromNode(
+      /** @type {Element} */ (source)
+    );
   }
 
   /**
@@ -511,18 +512,24 @@ class WFS extends XMLFeature {
     const context = {
       node,
     };
-    assign(context, {
+    Object.assign(context, {
       'version': this.version_,
       'srsName': options.srsName,
       'featureNS': options.featureNS ? options.featureNS : this.featureNS_,
       'featurePrefix': options.featurePrefix,
       'propertyNames': options.propertyNames ? options.propertyNames : [],
     });
-    assert(Array.isArray(options.featureTypes), 11); // `options.featureTypes` must be an Array
+    assert(
+      Array.isArray(options.featureTypes),
+      '`options.featureTypes` must be an Array'
+    );
     if (typeof options.featureTypes[0] === 'string') {
       let filter = options.filter;
       if (options.bbox) {
-        assert(options.geometryName, 12); // `options.geometryName` must also be provided when `options.bbox` is set
+        assert(
+          options.geometryName,
+          '`options.geometryName` must also be provided when `options.bbox` is set'
+        );
         filter = this.combineBboxAndFilter(
           options.geometryName,
           options.bbox,
@@ -530,7 +537,7 @@ class WFS extends XMLFeature {
           filter
         );
       }
-      assign(context, {
+      Object.assign(context, {
         'geometryName': options.geometryName,
         'filter': filter,
       });
@@ -548,7 +555,7 @@ class WFS extends XMLFeature {
           options.srsName,
           options.filter
         );
-        assign(context, {
+        Object.assign(context, {
           'geometryName': featureType.geometryName,
           'filter': completeFilter,
         });
@@ -563,16 +570,16 @@ class WFS extends XMLFeature {
    *
    * @param {!string} geometryName Geometry name to use.
    * @param {!import("../extent.js").Extent} extent Extent.
-   * @param {string} [opt_srsName] SRS name. No srsName attribute will be
+   * @param {string} [srsName] SRS name. No srsName attribute will be
    *    set on geometries when this is not provided.
-   * @param {import("./filter/Filter.js").default} [opt_filter] Filter condition.
+   * @param {import("./filter/Filter.js").default} [filter] Filter condition.
    * @return {import("./filter/Filter.js").default} The filter.
    */
-  combineBboxAndFilter(geometryName, extent, opt_srsName, opt_filter) {
-    const bboxFilter = bboxFilterFn(geometryName, extent, opt_srsName);
-    if (opt_filter) {
+  combineBboxAndFilter(geometryName, extent, srsName, filter) {
+    const bboxFilter = bboxFilterFn(geometryName, extent, srsName);
+    if (filter) {
       // if bbox and filter are both set, combine the two into a single filter
-      return andFilterFn(opt_filter, bboxFilter);
+      return andFilterFn(filter, bboxFilter);
     }
     return bboxFilter;
   }
@@ -686,7 +693,7 @@ function createTransactionRequest(node, baseObj, version, options) {
   } else if (version === '2.0.0') {
     gmlVersion = 3.2;
   }
-  const obj = assign(
+  const obj = Object.assign(
     {node},
     {
       version,
@@ -820,11 +827,10 @@ function getTypeName(featurePrefix, featureType) {
   featurePrefix = featurePrefix ? featurePrefix : FEATURE_PREFIX;
   const prefix = featurePrefix + ':';
   // The featureType already contains the prefix.
-  if (featureType.indexOf(prefix) === 0) {
+  if (featureType.startsWith(prefix)) {
     return featureType;
-  } else {
-    return prefix + featureType;
   }
+  return prefix + featureType;
 }
 
 /**
@@ -834,7 +840,7 @@ function getTypeName(featurePrefix, featureType) {
  */
 function writeDelete(node, feature, objectStack) {
   const context = objectStack[objectStack.length - 1];
-  assert(feature.getId() !== undefined, 26); // Features must have an id set
+  assert(feature.getId() !== undefined, 'Features must have an id set');
   const featureType = context['featureType'];
   const featurePrefix = context['featurePrefix'];
   const featureNS = context['featureNS'];
@@ -854,7 +860,7 @@ function writeDelete(node, feature, objectStack) {
  */
 function writeUpdate(node, feature, objectStack) {
   const context = objectStack[objectStack.length - 1];
-  assert(feature.getId() !== undefined, 27); // Features must have an id set
+  assert(feature.getId() !== undefined, 'Features must have an id set');
   const version = context['version'];
   const featureType = context['featureType'];
   const featurePrefix = context['featurePrefix'];
@@ -1035,7 +1041,7 @@ function writeQuery(node, featureType, objectStack) {
     node.setAttributeNS(XMLNS, 'xmlns:' + featurePrefix, featureNS);
   }
   const item = /** @type {import("../xml.js").NodeStackItem} */ (
-    assign({}, context)
+    Object.assign({}, context)
   );
   item.node = node;
   pushSerializeAndPop(
@@ -1062,7 +1068,7 @@ function writeFilterCondition(node, filter, objectStack) {
   const context = /** @type {Object} */ (objectStack[objectStack.length - 1]);
   /** @type {import("../xml.js").NodeStackItem} */
   const item = {node};
-  assign(item, {context});
+  Object.assign(item, {context});
   pushSerializeAndPop(
     item,
     GETFEATURE_SERIALIZERS,
@@ -1167,7 +1173,7 @@ function writeLogicalFilter(node, filter, objectStack) {
   const context = parent['context'];
   /** @type {import("../xml.js").NodeStackItem} */
   const item = {node};
-  assign(item, {context});
+  Object.assign(item, {context});
   const conditions = filter.conditions;
   for (let i = 0, ii = conditions.length; i < ii; ++i) {
     const condition = conditions[i];
@@ -1191,7 +1197,7 @@ function writeNotFilter(node, filter, objectStack) {
   const context = parent['context'];
   /** @type {import("../xml.js").NodeStackItem} */
   const item = {node};
-  assign(item, {context});
+  Object.assign(item, {context});
   const condition = filter.condition;
   pushSerializeAndPop(
     item,
@@ -1322,17 +1328,17 @@ function writeTimeInstant(node, time) {
  * Encode filter as WFS `Filter` and return the Node.
  *
  * @param {import("./filter/Filter.js").default} filter Filter.
- * @param {string} opt_version WFS version. If not provided defaults to '1.1.0'
+ * @param {string} version WFS version. If not provided defaults to '1.1.0'
  * @return {Node} Result.
  * @api
  */
-export function writeFilter(filter, opt_version) {
-  const version = opt_version || '1.1.0';
+export function writeFilter(filter, version) {
+  version = version || '1.1.0';
   const child = createElementNS(getFilterNS(version), 'Filter');
   const context = {
     node: child,
   };
-  assign(context, {
+  Object.assign(context, {
     'version': version,
     'filter': filter,
   });
@@ -1348,7 +1354,7 @@ export function writeFilter(filter, opt_version) {
 function writeGetFeature(node, featureTypes, objectStack) {
   const context = /** @type {Object} */ (objectStack[objectStack.length - 1]);
   const item = /** @type {import("../xml.js").NodeStackItem} */ (
-    assign({}, context)
+    Object.assign({}, context)
   );
   item.node = node;
   pushSerializeAndPop(

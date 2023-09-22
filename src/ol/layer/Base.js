@@ -5,7 +5,6 @@ import BaseObject from '../Object.js';
 import LayerProperty from './Property.js';
 import {abstract} from '../util.js';
 import {assert} from '../asserts.js';
-import {assign} from '../obj.js';
 import {clamp} from '../math.js';
 
 /**
@@ -34,7 +33,7 @@ import {clamp} from '../math.js';
  * @property {boolean} [visible=true] Visibility.
  * @property {import("../extent.js").Extent} [extent] The bounding extent for layer rendering.  The layer will not be
  * rendered outside of this extent.
- * @property {number} [zIndex] The z-index for layer rendering.  At rendering time, the layers
+ * @property {number | undefined} [zIndex] The z-index for layer rendering.  At rendering time, the layers
  * will be ordered, first by Z-index and then by position. When `undefined`, a `zIndex` of 0 is assumed
  * for layers that are added to the map's `layers` collection, or `Infinity` when the layer's `setMap()`
  * method was used.
@@ -55,8 +54,8 @@ import {clamp} from '../math.js';
  * @classdesc
  * Abstract base class; normally only used for creating subclasses and not
  * instantiated in apps.
- * Note that with {@link module:ol/layer/Base} and all its subclasses, any property set in
- * the options is set as a {@link module:ol/Object} property on the layer object, so
+ * Note that with {@link module:ol/layer/Base~BaseLayer} and all its subclasses, any property set in
+ * the options is set as a {@link module:ol/Object~BaseObject} property on the layer object, so
  * is observable, and has get/set accessors.
  *
  * @api
@@ -92,15 +91,18 @@ class BaseLayer extends BaseObject {
     /**
      * @type {Object<string, *>}
      */
-    const properties = assign({}, options);
+    const properties = Object.assign({}, options);
     if (typeof options.properties === 'object') {
       delete properties.properties;
-      assign(properties, options.properties);
+      Object.assign(properties, options.properties);
     }
 
     properties[LayerProperty.OPACITY] =
       options.opacity !== undefined ? options.opacity : 1;
-    assert(typeof properties[LayerProperty.OPACITY] === 'number', 64); // Layer opacity must be a number
+    assert(
+      typeof properties[LayerProperty.OPACITY] === 'number',
+      'Layer opacity must be a number'
+    );
 
     properties[LayerProperty.VISIBLE] =
       options.visible !== undefined ? options.visible : true;
@@ -150,16 +152,16 @@ class BaseLayer extends BaseObject {
    * This method is not meant to be called by layers or layer renderers because the state
    * is incorrect if the layer is included in a layer group.
    *
-   * @param {boolean} [opt_managed] Layer is managed.
+   * @param {boolean} [managed] Layer is managed.
    * @return {import("./Layer.js").State} Layer state.
    */
-  getLayerState(opt_managed) {
+  getLayerState(managed) {
     /** @type {import("./Layer.js").State} */
     const state =
       this.state_ ||
       /** @type {?} */ ({
         layer: this,
-        managed: opt_managed === undefined ? true : opt_managed,
+        managed: managed === undefined ? true : managed,
       });
     const zIndex = this.getZIndex();
     state.opacity = clamp(Math.round(this.getOpacity() * 100) / 100, 0, 1);
@@ -177,21 +179,21 @@ class BaseLayer extends BaseObject {
 
   /**
    * @abstract
-   * @param {Array<import("./Layer.js").default>} [opt_array] Array of layers (to be
+   * @param {Array<import("./Layer.js").default>} [array] Array of layers (to be
    *     modified in place).
    * @return {Array<import("./Layer.js").default>} Array of layers.
    */
-  getLayersArray(opt_array) {
+  getLayersArray(array) {
     return abstract();
   }
 
   /**
    * @abstract
-   * @param {Array<import("./Layer.js").State>} [opt_states] Optional list of layer
+   * @param {Array<import("./Layer.js").State>} [states] Optional list of layer
    *     states (to be modified in place).
    * @return {Array<import("./Layer.js").State>} List of layer states.
    */
-  getLayerStatesArray(opt_states) {
+  getLayerStatesArray(states) {
     return abstract();
   }
 
@@ -209,7 +211,8 @@ class BaseLayer extends BaseObject {
   }
 
   /**
-   * Return the maximum resolution of the layer.
+   * Return the maximum resolution of the layer. Returns Infinity if
+   * the layer has no maximum resolution set.
    * @return {number} The maximum resolution of the layer.
    * @observable
    * @api
@@ -219,7 +222,8 @@ class BaseLayer extends BaseObject {
   }
 
   /**
-   * Return the minimum resolution of the layer.
+   * Return the minimum resolution of the layer. Returns 0 if
+   * the layer has no minimum resolution set.
    * @return {number} The minimum resolution of the layer.
    * @observable
    * @api
@@ -229,7 +233,8 @@ class BaseLayer extends BaseObject {
   }
 
   /**
-   * Return the minimum zoom level of the layer.
+   * Return the minimum zoom level of the layer. Returns -Infinity if
+   * the layer has no minimum zoom set.
    * @return {number} The minimum zoom level of the layer.
    * @observable
    * @api
@@ -239,7 +244,8 @@ class BaseLayer extends BaseObject {
   }
 
   /**
-   * Return the maximum zoom level of the layer.
+   * Return the maximum zoom level of the layer. Returns Infinity if
+   * the layer has no maximum zoom set.
    * @return {number} The maximum zoom level of the layer.
    * @observable
    * @api
@@ -260,15 +266,16 @@ class BaseLayer extends BaseObject {
 
   /**
    * @abstract
-   * @return {import("../source/State.js").default} Source state.
+   * @return {import("../source/Source.js").State} Source state.
    */
   getSourceState() {
     return abstract();
   }
 
   /**
-   * Return the visibility of the layer (`true` or `false`).
-   * @return {boolean} The visibility of the layer.
+   * Return the value of this layer's `visible` property. To find out whether the layer
+   * is visible on a map, use `isVisible()` instead.
+   * @return {boolean} The value of the `visible` property of the layer.
    * @observable
    * @api
    */
@@ -278,21 +285,21 @@ class BaseLayer extends BaseObject {
 
   /**
    * Return the Z-index of the layer, which is used to order layers before
-   * rendering. The default Z-index is 0.
-   * @return {number} The Z-index of the layer.
+   * rendering. Returns undefined if the layer is unmanaged.
+   * @return {number|undefined} The Z-index of the layer.
    * @observable
    * @api
    */
   getZIndex() {
-    return /** @type {number} */ (this.get(LayerProperty.Z_INDEX));
+    return /** @type {number|undefined} */ (this.get(LayerProperty.Z_INDEX));
   }
 
   /**
    * Sets the background color.
-   * @param {BackgroundColor} [opt_background] Background color.
+   * @param {BackgroundColor} [background] Background color.
    */
-  setBackground(opt_background) {
-    this.background_ = opt_background;
+  setBackground(background) {
+    this.background_ = background;
     this.changed();
   }
 
@@ -358,7 +365,7 @@ class BaseLayer extends BaseObject {
    * @api
    */
   setOpacity(opacity) {
-    assert(typeof opacity === 'number', 64); // Layer opacity must be a number
+    assert(typeof opacity === 'number', 'Layer opacity must be a number');
     this.set(LayerProperty.OPACITY, opacity);
   }
 

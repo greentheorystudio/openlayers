@@ -3,7 +3,7 @@
  */
 import BaseVector from './BaseVector.js';
 import WebGLPointsLayerRenderer from '../renderer/webgl/PointsLayer.js';
-import {assign} from '../obj.js';
+import {ShaderBuilder} from '../webgl/ShaderBuilder.js';
 import {clamp} from '../math.js';
 import {createCanvasContext2D} from '../dom.js';
 
@@ -33,7 +33,7 @@ import {createCanvasContext2D} from '../dom.js';
  * @property {string|function(import("../Feature.js").default):number} [weight='weight'] The feature
  * attribute to use for the weight or a function that returns a weight from a feature. Weight values
  * should range from 0 to 1 (and values outside will be clamped to that range).
- * @property {import("../source/Vector.js").default<import("../geom/Point.js").default>} [source] Point source.
+ * @property {import("../source/Vector.js").default} [source] Point source.
  * @property {Object<string, *>} [properties] Arbitrary observable properties. Can be accessed with `#get()` and `#set()`.
  */
 
@@ -66,12 +66,12 @@ const DEFAULT_GRADIENT = ['#00f', '#0ff', '#0f0', '#ff0', '#f00'];
  */
 class Heatmap extends BaseVector {
   /**
-   * @param {Options} [opt_options] Options.
+   * @param {Options} [options] Options.
    */
-  constructor(opt_options) {
-    const options = opt_options ? opt_options : {};
+  constructor(options) {
+    options = options ? options : {};
 
-    const baseOptions = assign({}, options);
+    const baseOptions = Object.assign({}, options);
 
     delete baseOptions.gradient;
     delete baseOptions.radius;
@@ -175,109 +175,40 @@ class Heatmap extends BaseVector {
   }
 
   createRenderer() {
+    const builder = new ShaderBuilder()
+      .addAttribute('float a_weight')
+      .addVarying('v_weight', 'float', 'a_weight')
+      .addUniform('float u_size')
+      .addUniform('float u_blurSlope')
+      .setSymbolSizeExpression('vec2(u_size)')
+      .setSymbolColorExpression(
+        'vec4(smoothstep(0., 1., (1. - length(coordsPx * 2. / v_quadSizePx)) * u_blurSlope) * v_weight)'
+      );
+
     return new WebGLPointsLayerRenderer(this, {
       className: this.getClassName(),
       attributes: [
         {
           name: 'weight',
-          callback: function (feature) {
+          callback: (feature) => {
             const weight = this.weightFunction_(feature);
             return weight !== undefined ? clamp(weight, 0, 1) : 1;
-          }.bind(this),
+          },
         },
       ],
-      vertexShader: `
-        precision mediump float;
-        uniform mat4 u_projectionMatrix;
-        uniform mat4 u_offsetScaleMatrix;
-        uniform float u_size;
-        attribute vec2 a_position;
-        attribute float a_index;
-        attribute float a_weight;
-
-        varying vec2 v_texCoord;
-        varying float v_weight;
-
-        void main(void) {
-          mat4 offsetMatrix = u_offsetScaleMatrix;
-          float offsetX = a_index == 0.0 || a_index == 3.0 ? -u_size / 2.0 : u_size / 2.0;
-          float offsetY = a_index == 0.0 || a_index == 1.0 ? -u_size / 2.0 : u_size / 2.0;
-          vec4 offsets = offsetMatrix * vec4(offsetX, offsetY, 0.0, 0.0);
-          gl_Position = u_projectionMatrix * vec4(a_position, 0.0, 1.0) + offsets;
-          float u = a_index == 0.0 || a_index == 3.0 ? 0.0 : 1.0;
-          float v = a_index == 0.0 || a_index == 1.0 ? 0.0 : 1.0;
-          v_texCoord = vec2(u, v);
-          v_weight = a_weight;
-        }`,
-      fragmentShader: `
-        precision mediump float;
-        uniform float u_blurSlope;
-
-        varying vec2 v_texCoord;
-        varying float v_weight;
-
-        void main(void) {
-          vec2 texCoord = v_texCoord * 2.0 - vec2(1.0, 1.0);
-          float sqRadius = texCoord.x * texCoord.x + texCoord.y * texCoord.y;
-          float value = (1.0 - sqrt(sqRadius)) * u_blurSlope;
-          float alpha = smoothstep(0.0, 1.0, value) * v_weight;
-          gl_FragColor = vec4(alpha, alpha, alpha, alpha);
-        }`,
-      hitVertexShader: `
-        precision mediump float;
-        uniform mat4 u_projectionMatrix;
-        uniform mat4 u_offsetScaleMatrix;
-        uniform float u_size;
-        attribute vec2 a_position;
-        attribute float a_index;
-        attribute float a_weight;
-        attribute vec4 a_hitColor;
-
-        varying vec2 v_texCoord;
-        varying float v_weight;
-        varying vec4 v_hitColor;
-
-        void main(void) {
-          mat4 offsetMatrix = u_offsetScaleMatrix;
-          float offsetX = a_index == 0.0 || a_index == 3.0 ? -u_size / 2.0 : u_size / 2.0;
-          float offsetY = a_index == 0.0 || a_index == 1.0 ? -u_size / 2.0 : u_size / 2.0;
-          vec4 offsets = offsetMatrix * vec4(offsetX, offsetY, 0.0, 0.0);
-          gl_Position = u_projectionMatrix * vec4(a_position, 0.0, 1.0) + offsets;
-          float u = a_index == 0.0 || a_index == 3.0 ? 0.0 : 1.0;
-          float v = a_index == 0.0 || a_index == 1.0 ? 0.0 : 1.0;
-          v_texCoord = vec2(u, v);
-          v_hitColor = a_hitColor;
-          v_weight = a_weight;
-        }`,
-      hitFragmentShader: `
-        precision mediump float;
-        uniform float u_blurSlope;
-
-        varying vec2 v_texCoord;
-        varying float v_weight;
-        varying vec4 v_hitColor;
-
-        void main(void) {
-          vec2 texCoord = v_texCoord * 2.0 - vec2(1.0, 1.0);
-          float sqRadius = texCoord.x * texCoord.x + texCoord.y * texCoord.y;
-          float value = (1.0 - sqrt(sqRadius)) * u_blurSlope;
-          float alpha = smoothstep(0.0, 1.0, value) * v_weight;
-          if (alpha < 0.05) {
-            discard;
-          }
-
-          gl_FragColor = v_hitColor;
-        }`,
       uniforms: {
-        u_size: function () {
+        u_size: () => {
           return (this.get(Property.RADIUS) + this.get(Property.BLUR)) * 2;
-        }.bind(this),
-        u_blurSlope: function () {
+        },
+        u_blurSlope: () => {
           return (
             this.get(Property.RADIUS) / Math.max(1, this.get(Property.BLUR))
           );
-        }.bind(this),
+        },
       },
+      hitDetectionEnabled: true,
+      vertexShader: builder.getSymbolVertexShader(),
+      fragmentShader: builder.getSymbolFragmentShader(),
       postProcesses: [
         {
           fragmentShader: `
@@ -296,12 +227,8 @@ class Heatmap extends BaseVector {
               gl_FragColor.rgb *= gl_FragColor.a;
             }`,
           uniforms: {
-            u_gradientTexture: function () {
-              return this.gradient_;
-            }.bind(this),
-            u_opacity: function () {
-              return this.getOpacity();
-            }.bind(this),
+            u_gradientTexture: () => this.gradient_,
+            u_opacity: () => this.getOpacity(),
           },
         },
       ],

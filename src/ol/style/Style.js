@@ -4,12 +4,11 @@
 
 import CircleStyle from './Circle.js';
 import Fill from './Fill.js';
-import GeometryType from '../geom/GeometryType.js';
 import Stroke from './Stroke.js';
 import {assert} from '../asserts.js';
 
 /**
- * A function that takes an {@link module:ol/Feature} and a `{number}`
+ * A function that takes an {@link module:ol/Feature~Feature} and a `{number}`
  * representing the view's resolution. The function should return a
  * {@link module:ol/style/Style~Style} or an array of them. This way e.g. a
  * vector layer can be styled. If the function returns `undefined`, the
@@ -24,8 +23,8 @@ import {assert} from '../asserts.js';
  */
 
 /**
- * A function that takes an {@link module:ol/Feature} as argument and returns an
- * {@link module:ol/geom/Geometry} that will be rendered and styled for the feature.
+ * A function that takes an {@link module:ol/Feature~Feature} as argument and returns an
+ * {@link module:ol/geom/Geometry~Geometry} that will be rendered and styled for the feature.
  *
  * @typedef {function(import("../Feature.js").FeatureLike):
  *     (import("../geom/Geometry.js").default|import("../render/Feature.js").default|undefined)} GeometryFunction
@@ -37,8 +36,7 @@ import {assert} from '../asserts.js';
  * 1. The pixel coordinates of the geometry in GeoJSON notation.
  * 2. The {@link module:ol/render~State} of the layer renderer.
  *
- * @typedef {function((import("../coordinate.js").Coordinate|Array<import("../coordinate.js").Coordinate>|Array<Array<import("../coordinate.js").Coordinate>>),import("../render.js").State): void}
- * RenderFunction
+ * @typedef {function((import("../coordinate.js").Coordinate|Array<import("../coordinate.js").Coordinate>|Array<Array<import("../coordinate.js").Coordinate>>|Array<Array<Array<import("../coordinate.js").Coordinate>>>),import("../render.js").State): void} RenderFunction
  */
 
 /**
@@ -66,7 +64,7 @@ import {assert} from '../asserts.js';
  *
  * If no style is defined, the following default style is used:
  * ```js
- *  import {Circle, Fill, Stroke, Style} from 'ol/style';
+ *  import {Circle, Fill, Stroke, Style} from 'ol/style.js';
  *
  *  const fill = new Fill({
  *    color: 'rgba(255,255,255,0.4)',
@@ -90,23 +88,22 @@ import {assert} from '../asserts.js';
  *
  * A separate editing style has the following defaults:
  * ```js
- *  import GeometryType from 'ol/geom/GeometryType';
- *  import {Circle, Fill, Stroke, Style} from 'ol/style';
+ *  import {Circle, Fill, Stroke, Style} from 'ol/style.js';
  *
  *  const styles = {};
  *  const white = [255, 255, 255, 1];
  *  const blue = [0, 153, 255, 1];
  *  const width = 3;
- *  styles[GeometryType.POLYGON] = [
+ *  styles['Polygon'] = [
  *    new Style({
  *      fill: new Fill({
  *        color: [255, 255, 255, 0.5],
  *      }),
  *    }),
  *  ];
- *  styles[GeometryType.MULTI_POLYGON] = styles[GeometryType.POLYGON];
- *
- *  styles[GeometryType.LINE_STRING] = [
+ *  styles['MultiPolygon'] =
+ *      styles['Polygon'];
+ *  styles['LineString'] = [
  *    new Style({
  *      stroke: new Stroke({
  *        color: white,
@@ -120,13 +117,13 @@ import {assert} from '../asserts.js';
  *      }),
  *    }),
  *  ];
- *  styles[GeometryType.MULTI_LINE_STRING] = styles[GeometryType.LINE_STRING];
+ *  styles['MultiLineString'] = styles['LineString'];
  *
- *  styles[GeometryType.CIRCLE] = styles[GeometryType.POLYGON].concat(
- *    styles[GeometryType.LINE_STRING]
+ *  styles['Circle'] = styles['Polygon'].concat(
+ *    styles['LineString']
  *  );
  *
- *  styles[GeometryType.POINT] = [
+ *  styles['Point'] = [
  *    new Style({
  *      image: new Circle({
  *        radius: width * 2,
@@ -141,21 +138,23 @@ import {assert} from '../asserts.js';
  *      zIndex: Infinity,
  *    }),
  *  ];
- *  styles[GeometryType.MULTI_POINT] = styles[GeometryType.POINT];
- *
- *  styles[GeometryType.GEOMETRY_COLLECTION] = styles[
- *    GeometryType.POLYGON
- *  ].concat(styles[GeometryType.LINE_STRING], styles[GeometryType.POINT]);
+ *  styles['MultiPoint'] =
+ *      styles['Point'];
+ *  styles['GeometryCollection'] =
+ *      styles['Polygon'].concat(
+ *          styles['LineString'],
+ *          styles['Point']
+ *      );
  * ```
  *
  * @api
  */
 class Style {
   /**
-   * @param {Options} [opt_options] Style options.
+   * @param {Options} [options] Style options.
    */
-  constructor(opt_options) {
-    const options = opt_options || {};
+  constructor(options) {
+    options = options || {};
 
     /**
      * @private
@@ -443,7 +442,10 @@ export function toFunction(obj) {
     if (Array.isArray(obj)) {
       styles = obj;
     } else {
-      assert(typeof (/** @type {?} */ (obj).getZIndex) === 'function', 41); // Expected an `Style` or an array of `Style`
+      assert(
+        typeof (/** @type {?} */ (obj).getZIndex) === 'function',
+        'Expected an `Style` or an array of `Style`'
+      );
       const style = /** @type {Style} */ (obj);
       styles = [style];
     }
@@ -495,24 +497,24 @@ export function createDefaultStyle(feature, resolution) {
 
 /**
  * Default styles for editing features.
- * @return {Object<import("../geom/GeometryType.js").default, Array<Style>>} Styles
+ * @return {Object<import("../geom/Geometry.js").Type, Array<Style>>} Styles
  */
 export function createEditingStyle() {
-  /** @type {Object<import("../geom/GeometryType.js").default, Array<Style>>} */
+  /** @type {Object<import("../geom/Geometry.js").Type, Array<Style>>} */
   const styles = {};
   const white = [255, 255, 255, 1];
   const blue = [0, 153, 255, 1];
   const width = 3;
-  styles[GeometryType.POLYGON] = [
+  styles['Polygon'] = [
     new Style({
       fill: new Fill({
         color: [255, 255, 255, 0.5],
       }),
     }),
   ];
-  styles[GeometryType.MULTI_POLYGON] = styles[GeometryType.POLYGON];
+  styles['MultiPolygon'] = styles['Polygon'];
 
-  styles[GeometryType.LINE_STRING] = [
+  styles['LineString'] = [
     new Style({
       stroke: new Stroke({
         color: white,
@@ -526,13 +528,11 @@ export function createEditingStyle() {
       }),
     }),
   ];
-  styles[GeometryType.MULTI_LINE_STRING] = styles[GeometryType.LINE_STRING];
+  styles['MultiLineString'] = styles['LineString'];
 
-  styles[GeometryType.CIRCLE] = styles[GeometryType.POLYGON].concat(
-    styles[GeometryType.LINE_STRING]
-  );
+  styles['Circle'] = styles['Polygon'].concat(styles['LineString']);
 
-  styles[GeometryType.POINT] = [
+  styles['Point'] = [
     new Style({
       image: new CircleStyle({
         radius: width * 2,
@@ -547,11 +547,12 @@ export function createEditingStyle() {
       zIndex: Infinity,
     }),
   ];
-  styles[GeometryType.MULTI_POINT] = styles[GeometryType.POINT];
+  styles['MultiPoint'] = styles['Point'];
 
-  styles[GeometryType.GEOMETRY_COLLECTION] = styles[
-    GeometryType.POLYGON
-  ].concat(styles[GeometryType.LINE_STRING], styles[GeometryType.POINT]);
+  styles['GeometryCollection'] = styles['Polygon'].concat(
+    styles['LineString'],
+    styles['Point']
+  );
 
   return styles;
 }

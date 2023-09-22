@@ -3,11 +3,14 @@
  */
 import Layer from './Layer.js';
 import RBush from 'rbush';
-import {assign} from '../obj.js';
-import {
+import Style, {
   createDefaultStyle,
   toFunction as toStyleFunction,
 } from '../style/Style.js';
+import {
+  flatStylesToStyleFunction,
+  rulesToStyleFunction,
+} from '../render/canvas/style.js';
 
 /**
  * @template {import("../source/Vector.js").default|import("../source/VectorTile.js").default} VectorSourceType
@@ -36,10 +39,10 @@ import {
  * renderer when getting features from the vector source for the rendering or hit-detection.
  * Recommended value: the size of the largest symbol, line width or label.
  * @property {VectorSourceType} [source] Source.
- * @property {import("../PluggableMap.js").default} [map] Sets the layer as overlay on a map. The map will not manage
+ * @property {import("../Map.js").default} [map] Sets the layer as overlay on a map. The map will not manage
  * this layer in its layers collection, and the layer will be rendered on top. This is useful for
  * temporary layers. The standard way to add a layer to a map and have it managed by the map is to
- * use {@link import("../PluggableMap.js").default#addLayer map.addLayer()}.
+ * use [map.addLayer()]{@link import("../Map.js").default#addLayer}.
  * @property {boolean} [declutter=false] Declutter images and text. Decluttering is applied to all
  * image and text styles of all Vector and VectorTile layers that have set this to `true`. The priority
  * is defined by the z-index of the layer, the `zIndex` of the style and the render order of features.
@@ -50,7 +53,7 @@ import {
  * the fill and stroke styles of all of those layers regardless of z-index.  To opt out of this
  * behavior and place declutterd features with their own layer configure the layer with a `className`
  * other than `ol-layer`.
- * @property {import("../style/Style.js").StyleLike|null} [style] Layer style. When set to `null`, only
+ * @property {import("../style/Style.js").StyleLike|import("../style/flat.js").FlatStyleLike|null} [style] Layer style. When set to `null`, only
  * features that have their own style will be rendered. See {@link module:ol/style/Style~Style} for the default style
  * which will be used if this is not set.
  * @property {import("./Base.js").BackgroundColor} [background] Background color for the layer. If not specified, no background
@@ -86,12 +89,12 @@ const Property = {
  */
 class BaseVectorLayer extends Layer {
   /**
-   * @param {Options<VectorSourceType>} [opt_options] Options.
+   * @param {Options<VectorSourceType>} [options] Options.
    */
-  constructor(opt_options) {
-    const options = opt_options ? opt_options : {};
+  constructor(options) {
+    options = options ? options : {};
 
-    const baseOptions = assign({}, options);
+    const baseOptions = Object.assign({}, options);
 
     delete baseOptions.style;
     delete baseOptions.renderBuffer;
@@ -161,12 +164,12 @@ class BaseVectorLayer extends Layer {
    * when a hit was detected, or it will be empty.
    *
    * The hit detection algorithm used for this method is optimized for performance, but is less
-   * accurate than the one used in {@link import("../PluggableMap.js").default#getFeaturesAtPixel}: Text
-   * is not considered, and icons are only represented by their bounding box instead of the exact
+   * accurate than the one used in [map.getFeaturesAtPixel()]{@link import("../Map.js").default#getFeaturesAtPixel}.
+   * Text is not considered, and icons are only represented by their bounding box instead of the exact
    * image.
    *
    * @param {import("../pixel.js").Pixel} pixel Pixel.
-   * @return {Promise<Array<import("../Feature").default>>} Promise that resolves with an array of features.
+   * @return {Promise<Array<import("../Feature").FeatureLike>>} Promise that resolves with an array of features.
    * @api
    */
   getFeatures(pixel) {
@@ -227,7 +230,7 @@ class BaseVectorLayer extends Layer {
 
   /**
    * Render declutter items for this layer
-   * @param {import("../PluggableMap.js").FrameState} frameState Frame state.
+   * @param {import("../Map.js").FrameState} frameState Frame state.
    */
   renderDeclutter(frameState) {
     if (!frameState.declutterTree) {
@@ -250,16 +253,92 @@ class BaseVectorLayer extends Layer {
    * an array of styles. If set to `null`, the layer has no style (a `null` style),
    * so only features that have their own styles will be rendered in the layer. Call
    * `setStyle()` without arguments to reset to the default style. See
-   * {@link module:ol/style/Style~Style} for information on the default style.
-   * @param {import("../style/Style.js").StyleLike|null} [opt_style] Layer style.
+   * [the ol/style/Style module]{@link module:ol/style/Style~Style} for information on the default style.
+   *
+   * If your layer has a static style, you can use [flat style]{@link module:ol/style/flat~FlatStyle} object
+   * literals instead of using the `Style` and symbolizer constructors (`Fill`, `Stroke`, etc.):
+   * ```js
+   * vectorLayer.setStyle({
+   *   "fill-color": "yellow",
+   *   "stroke-color": "black",
+   *   "stroke-width": 4
+   * })
+   * ```
+   *
+   * @param {import("../style/Style.js").StyleLike|import("../style/flat.js").FlatStyleLike|null} [style] Layer style.
    * @api
    */
-  setStyle(opt_style) {
-    this.style_ = opt_style !== undefined ? opt_style : createDefaultStyle;
+  setStyle(style) {
+    this.style_ = toStyleLike(style);
     this.styleFunction_ =
-      opt_style === null ? undefined : toStyleFunction(this.style_);
+      style === null ? undefined : toStyleFunction(this.style_);
     this.changed();
   }
+}
+
+/**
+ * Coerce the allowed style types into a shorter list of types.  Flat styles, arrays of flat
+ * styles, and arrays of rules are converted into style functions.
+ *
+ * @param {import("../style/Style.js").StyleLike|import("../style/flat.js").FlatStyleLike|null} [style] Layer style.
+ * @return {import("../style/Style.js").StyleLike|null} The style.
+ */
+function toStyleLike(style) {
+  if (style === undefined) {
+    return createDefaultStyle;
+  }
+  if (!style) {
+    return null;
+  }
+  if (typeof style === 'function') {
+    return style;
+  }
+  if (style instanceof Style) {
+    return style;
+  }
+  if (!Array.isArray(style)) {
+    return flatStylesToStyleFunction([style]);
+  }
+  if (style.length === 0) {
+    return [];
+  }
+
+  const length = style.length;
+  const first = style[0];
+
+  if (first instanceof Style) {
+    /**
+     * @type {Array<Style>}
+     */
+    const styles = new Array(length);
+    for (let i = 0; i < length; ++i) {
+      const candidate = style[i];
+      if (!(candidate instanceof Style)) {
+        throw new Error('Expected a list of style instances');
+      }
+      styles[i] = candidate;
+    }
+    return styles;
+  }
+
+  if ('style' in first) {
+    /**
+     * @type Array<import("../style/flat.js").Rule>
+     */
+    const rules = new Array(length);
+    for (let i = 0; i < length; ++i) {
+      const candidate = style[i];
+      if (!('style' in candidate)) {
+        throw new Error('Expected a list of rules with a style property');
+      }
+      rules[i] = candidate;
+    }
+    return rulesToStyleFunction(rules);
+  }
+
+  const flatStyles =
+    /** @type {Array<import("../style/flat.js").FlatStyle>} */ (style);
+  return flatStylesToStyleFunction(flatStyles);
 }
 
 export default BaseVectorLayer;

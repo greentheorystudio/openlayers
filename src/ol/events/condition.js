@@ -7,7 +7,7 @@ import {MAC, WEBKIT} from '../has.js';
 import {assert} from '../asserts.js';
 
 /**
- * A function that takes an {@link module:ol/MapBrowserEvent} and returns a
+ * A function that takes an {@link module:ol/MapBrowserEvent~MapBrowserEvent} and returns a
  * `{boolean}`. If the condition is met, true should be returned.
  *
  * @typedef {function(this: ?, import("../MapBrowserEvent.js").default): boolean} Condition
@@ -219,6 +219,21 @@ export const platformModifierKeyOnly = function (mapBrowserEvent) {
 };
 
 /**
+ * Return `true` if the platform-modifier-key (the meta-key on Mac,
+ * ctrl-key otherwise) is pressed.
+ *
+ * @param {import("../MapBrowserEvent.js").default} mapBrowserEvent Map browser event.
+ * @return {boolean} True if the platform modifier key is pressed.
+ * @api
+ */
+export const platformModifierKey = function (mapBrowserEvent) {
+  const originalEvent = /** @type {KeyboardEvent|MouseEvent|TouchEvent} */ (
+    mapBrowserEvent.originalEvent
+  );
+  return MAC ? originalEvent.metaKey : originalEvent.ctrlKey;
+};
+
+/**
  * Return `true` if only the shift-key is pressed, `false` otherwise (e.g. when
  * additionally the alt-key is pressed).
  *
@@ -238,8 +253,9 @@ export const shiftKeyOnly = function (mapBrowserEvent) {
 };
 
 /**
- * Return `true` if the target element is not editable, i.e. not a `<input>`-,
- * `<select>`- or `<textarea>`-element, `false` otherwise.
+ * Return `true` if the target element is not editable, i.e. not an `input`,
+ * `select`, or `textarea` element and no `contenteditable` attribute is
+ * set or inherited, `false` otherwise.
  *
  * @param {import("../MapBrowserEvent.js").default} mapBrowserEvent Map browser event.
  * @return {boolean} True only if the target element is not editable.
@@ -250,7 +266,15 @@ export const targetNotEditable = function (mapBrowserEvent) {
     mapBrowserEvent.originalEvent
   );
   const tagName = /** @type {Element} */ (originalEvent.target).tagName;
-  return tagName !== 'INPUT' && tagName !== 'SELECT' && tagName !== 'TEXTAREA';
+  return (
+    tagName !== 'INPUT' &&
+    tagName !== 'SELECT' &&
+    tagName !== 'TEXTAREA' &&
+    // `isContentEditable` is only available on `HTMLElement`, but it may also be a
+    // different type like `SVGElement`.
+    // @ts-ignore
+    !originalEvent.target.isContentEditable
+  );
 };
 
 /**
@@ -264,7 +288,10 @@ export const mouseOnly = function (mapBrowserEvent) {
   const pointerEvent = /** @type {import("../MapBrowserEvent").default} */ (
     mapBrowserEvent
   ).originalEvent;
-  assert(pointerEvent !== undefined, 56); // mapBrowserEvent must originate from a pointer event
+  assert(
+    pointerEvent !== undefined,
+    'mapBrowserEvent must originate from a pointer event'
+  );
   // see https://www.w3.org/TR/pointerevents/#widl-PointerEvent-pointerType
   return pointerEvent.pointerType == 'mouse';
 };
@@ -280,7 +307,10 @@ export const touchOnly = function (mapBrowserEvent) {
   const pointerEvt = /** @type {import("../MapBrowserEvent").default} */ (
     mapBrowserEvent
   ).originalEvent;
-  assert(pointerEvt !== undefined, 56); // mapBrowserEvent must originate from a pointer event
+  assert(
+    pointerEvt !== undefined,
+    'mapBrowserEvent must originate from a pointer event'
+  );
   // see https://www.w3.org/TR/pointerevents/#widl-PointerEvent-pointerType
   return pointerEvt.pointerType === 'touch';
 };
@@ -296,7 +326,10 @@ export const penOnly = function (mapBrowserEvent) {
   const pointerEvt = /** @type {import("../MapBrowserEvent").default} */ (
     mapBrowserEvent
   ).originalEvent;
-  assert(pointerEvt !== undefined, 56); // mapBrowserEvent must originate from a pointer event
+  assert(
+    pointerEvt !== undefined,
+    'mapBrowserEvent must originate from a pointer event'
+  );
   // see https://www.w3.org/TR/pointerevents/#widl-PointerEvent-pointerType
   return pointerEvt.pointerType === 'pen';
 };
@@ -314,6 +347,9 @@ export const primaryAction = function (mapBrowserEvent) {
   const pointerEvent = /** @type {import("../MapBrowserEvent").default} */ (
     mapBrowserEvent
   ).originalEvent;
-  assert(pointerEvent !== undefined, 56); // mapBrowserEvent must originate from a pointer event
+  assert(
+    pointerEvent !== undefined,
+    'mapBrowserEvent must originate from a pointer event'
+  );
   return pointerEvent.isPrimary && pointerEvent.button === 0;
 };

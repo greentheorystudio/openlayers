@@ -21,7 +21,7 @@ let container,
   workerFrameState,
   mainThreadFrameState;
 
-// Transform the container to account for the differnece between the (newer)
+// Transform the container to account for the difference between the (newer)
 // main thread frameState and the (older) worker frameState
 function updateContainerTransform() {
   if (workerFrameState) {
@@ -140,7 +140,7 @@ worker.addEventListener('message', (message) => {
     // Worker requested a new render frame
     map.render();
   } else if (canvas && message.data.action === 'rendered') {
-    // Worker provies a new render frame
+    // Worker provides a new render frame
     requestAnimationFrame(function () {
       const imageData = message.data.imageData;
       canvas.width = imageData.width;

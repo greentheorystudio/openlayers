@@ -562,6 +562,18 @@ describe('ol/View', function () {
     });
   });
 
+  describe('#setResolution()', function () {
+    it('does not change center when set to undefined', function () {
+      const center = [1, 1];
+      const view = new View({
+        center: center.slice(),
+        resolution: 1,
+      });
+      view.setResolution(undefined);
+      expect(view.getCenter()).to.eql(center);
+    });
+  });
+
   describe('#setCenter()', function () {
     it('allows setting undefined center', function () {
       const view = new View({
@@ -1994,6 +2006,13 @@ describe('ol/View', function () {
       expect(view.getHints()[1]).to.be(1);
       view.beginInteraction();
       expect(view.getHints()[1]).to.be(2);
+      view.endInteraction();
+      view.endInteraction();
+      expect(view.getHints()[1]).to.be(0);
+    });
+
+    it('does not allow hint value to become negative', function () {
+      view.beginInteraction();
       view.endInteraction();
       view.endInteraction();
       expect(view.getHints()[1]).to.be(0);

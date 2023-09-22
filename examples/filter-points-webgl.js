@@ -1,7 +1,7 @@
 import Feature from '../src/ol/Feature.js';
 import Map from '../src/ol/Map.js';
 import Point from '../src/ol/geom/Point.js';
-import Stamen from '../src/ol/source/Stamen.js';
+import StadiaMaps from '../src/ol/source/StadiaMaps.js';
 import TileLayer from '../src/ol/layer/Tile.js';
 import View from '../src/ol/View.js';
 import WebGLPointsLayer from '../src/ol/layer/WebGLPoints.js';
@@ -39,43 +39,44 @@ const style = {
     maxYear: 2015,
   },
   filter: ['between', ['get', 'year'], ['var', 'minYear'], ['var', 'maxYear']],
-  symbol: {
-    symbolType: 'circle',
-    size: [
-      '*',
-      ['interpolate', ['linear'], ['get', 'mass'], 0, 8, 200000, 26],
-      ['-', 1.75, ['*', animRatio, 0.75]],
-    ],
-    color: ['interpolate', ['linear'], animRatio, 0, newColor, 1, oldColor],
-    opacity: ['-', 1.0, ['*', animRatio, 0.75]],
-  },
+  'circle-radius': [
+    '*',
+    ['interpolate', ['linear'], ['get', 'mass'], 0, 4, 200000, 13],
+    ['-', 1.75, ['*', animRatio, 0.75]],
+  ],
+  'circle-fill-color': [
+    'interpolate',
+    ['linear'],
+    animRatio,
+    0,
+    newColor,
+    1,
+    oldColor,
+  ],
+  'circle-opacity': ['-', 1.0, ['*', animRatio, 0.75]],
 };
 
 // handle input values & events
 const minYearInput = document.getElementById('min-year');
 const maxYearInput = document.getElementById('max-year');
 
-function updateMinYear() {
-  style.variables.minYear = parseInt(minYearInput.value);
-  updateStatusText();
-}
-function updateMaxYear() {
-  style.variables.maxYear = parseInt(maxYearInput.value);
-  updateStatusText();
-}
 function updateStatusText() {
   const div = document.getElementById('status');
   div.querySelector('span.min-year').textContent = minYearInput.value;
   div.querySelector('span.max-year').textContent = maxYearInput.value;
 }
 
-minYearInput.addEventListener('input', updateMinYear);
-minYearInput.addEventListener('change', updateMinYear);
-maxYearInput.addEventListener('input', updateMaxYear);
-maxYearInput.addEventListener('change', updateMaxYear);
+minYearInput.addEventListener('input', function () {
+  style.variables.minYear = parseInt(minYearInput.value);
+  updateStatusText();
+});
+maxYearInput.addEventListener('input', function () {
+  style.variables.maxYear = parseInt(maxYearInput.value);
+  updateStatusText();
+});
 updateStatusText();
 
-// load data
+// load data;
 const client = new XMLHttpRequest();
 client.open('GET', 'data/csv/meteorite_landings.csv');
 client.onload = function () {
@@ -111,8 +112,8 @@ client.send();
 const map = new Map({
   layers: [
     new TileLayer({
-      source: new Stamen({
-        layer: 'toner',
+      source: new StadiaMaps({
+        layer: 'stamen_toner',
       }),
     }),
     new WebGLPointsLayer({

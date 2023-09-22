@@ -5,7 +5,6 @@ describe('ol.render.canvas', function () {
   font.href =
     'https://fonts.googleapis.com/css?family=Abel&text=wmytzilWMYTZIL%40%23%2F%26%3F%24%2510';
   font.rel = 'stylesheet';
-  const head = document.getElementsByTagName('head')[0];
 
   describe('ol.render.canvas.registerFont()', function () {
     beforeEach(function () {
@@ -65,7 +64,7 @@ describe('ol.render.canvas', function () {
     });
 
     it('triggers redraw and clear measurements for fonts that become available', function (done) {
-      head.appendChild(font);
+      document.head.appendChild(font);
       render.checkedFonts.addEventListener(
         'propertychange',
         function onPropertyChange(e) {
@@ -75,6 +74,8 @@ describe('ol.render.canvas', function () {
           );
           expect(e.key).to.be('normal\nnormal\nAbel');
           expect(render.textHeights).to.eql({});
+
+          document.head.removeChild(font);
           done();
         }
       );
@@ -113,7 +114,7 @@ describe('ol.render.canvas', function () {
     it('draws the image with correct parameters', function () {
       const layerContext = {
         save: sinon.spy(),
-        setTransform: sinon.spy(),
+        transform: sinon.spy(),
         drawImage: sinon.spy(),
         restore: sinon.spy(),
         globalAlpha: 1,
@@ -142,8 +143,8 @@ describe('ol.render.canvas', function () {
       );
 
       expect(layerContext.save.callCount).to.be(1);
-      expect(layerContext.setTransform.callCount).to.be(1);
-      expect(layerContext.setTransform.firstCall.args).to.eql(transform);
+      expect(layerContext.transform.callCount).to.be(1);
+      expect(layerContext.transform.firstCall.args).to.eql(transform);
       expect(layerContext.drawImage.callCount).to.be(1);
       expect(layerContext.globalAlpha).to.be(0.5);
       expect(layerContext.restore.callCount).to.be(1);

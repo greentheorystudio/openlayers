@@ -5,7 +5,6 @@ import MapRenderer from './Map.js';
 import ObjectEventType from '../ObjectEventType.js';
 import RenderEvent from '../render/Event.js';
 import RenderEventType from '../render/EventType.js';
-import SourceState from '../source/State.js';
 import {CLASS_UNSELECTABLE} from '../css.js';
 import {checkedFonts} from '../render/canvas.js';
 import {inView} from '../layer/Layer.js';
@@ -19,7 +18,7 @@ import {replaceChildren} from '../dom.js';
  */
 class CompositeMapRenderer extends MapRenderer {
   /**
-   * @param {import("../PluggableMap.js").default} map Map.
+   * @param {import("../Map.js").default} map Map.
    */
   constructor(map) {
     super(map);
@@ -60,11 +59,16 @@ class CompositeMapRenderer extends MapRenderer {
      * @type {boolean}
      */
     this.renderedVisible_ = true;
+
+    /**
+     * @type {Array<import("../layer/BaseVector.js").default>}
+     */
+    this.declutterLayers_ = [];
   }
 
   /**
    * @param {import("../render/EventType.js").default} type Event type.
-   * @param {import("../PluggableMap.js").FrameState} frameState Frame state.
+   * @param {import("../Map.js").FrameState} frameState Frame state.
    */
   dispatchRenderEvent(type, frameState) {
     const map = this.getMap();
@@ -82,7 +86,7 @@ class CompositeMapRenderer extends MapRenderer {
 
   /**
    * Render.
-   * @param {?import("../PluggableMap.js").FrameState} frameState Frame state.
+   * @param {?import("../Map.js").FrameState} frameState Frame state.
    */
   renderFrame(frameState) {
     if (!frameState) {
@@ -102,10 +106,10 @@ class CompositeMapRenderer extends MapRenderer {
     const viewState = frameState.viewState;
 
     this.children_.length = 0;
-    /**
-     * @type {Array<import("../layer/BaseVector.js").default>}
-     */
-    const declutterLayers = [];
+
+    const declutterLayers = this.declutterLayers_;
+    declutterLayers.length = 0;
+
     let previousElement = null;
     for (let i = 0, ii = layerStatesArray.length; i < ii; ++i) {
       const layerState = layerStatesArray[i];
@@ -115,8 +119,7 @@ class CompositeMapRenderer extends MapRenderer {
       const sourceState = layer.getSourceState();
       if (
         !inView(layerState, viewState) ||
-        (sourceState != SourceState.READY &&
-          sourceState != SourceState.UNDEFINED)
+        (sourceState != 'ready' && sourceState != 'undefined')
       ) {
         layer.unrender();
         continue;
@@ -136,9 +139,7 @@ class CompositeMapRenderer extends MapRenderer {
         );
       }
     }
-    for (let i = declutterLayers.length - 1; i >= 0; --i) {
-      declutterLayers[i].renderDeclutter(frameState);
-    }
+    this.flushDeclutterItems(frameState);
 
     replaceChildren(this.element_, this.children_);
 
@@ -153,47 +154,14 @@ class CompositeMapRenderer extends MapRenderer {
   }
 
   /**
-   * @param {import("../pixel.js").Pixel} pixel Pixel.
-   * @param {import("../PluggableMap.js").FrameState} frameState FrameState.
-   * @param {number} hitTolerance Hit tolerance in pixels.
-   * @param {function(import("../layer/Layer.js").default<import("../source/Source").default>, (Uint8ClampedArray|Uint8Array)): T} callback Layer
-   *     callback.
-   * @param {function(import("../layer/Layer.js").default<import("../source/Source").default>): boolean} layerFilter Layer filter
-   *     function, only layers which are visible and for which this function
-   *     returns `true` will be tested for features.  By default, all visible
-   *     layers will be tested.
-   * @return {T|undefined} Callback result.
-   * @template T
+   * @param {import("../Map.js").FrameState} frameState Frame state.
    */
-  forEachLayerAtPixel(pixel, frameState, hitTolerance, callback, layerFilter) {
-    const viewState = frameState.viewState;
-
-    const layerStates = frameState.layerStatesArray;
-    const numLayers = layerStates.length;
-
-    for (let i = numLayers - 1; i >= 0; --i) {
-      const layerState = layerStates[i];
-      const layer = layerState.layer;
-      if (
-        layer.hasRenderer() &&
-        inView(layerState, viewState) &&
-        layerFilter(layer)
-      ) {
-        const layerRenderer = layer.getRenderer();
-        const data = layerRenderer.getDataAtPixel(
-          pixel,
-          frameState,
-          hitTolerance
-        );
-        if (data) {
-          const result = callback(layer, data);
-          if (result) {
-            return result;
-          }
-        }
-      }
+  flushDeclutterItems(frameState) {
+    const layers = this.declutterLayers_;
+    for (let i = layers.length - 1; i >= 0; --i) {
+      layers[i].renderDeclutter(frameState);
     }
-    return undefined;
+    layers.length = 0;
   }
 }
 

@@ -3,15 +3,17 @@
  */
 import EventType from '../events/EventType.js';
 import Interaction, {zoomByDelta} from './Interaction.js';
-import {targetNotEditable} from '../events/condition.js';
+import {platformModifierKey, targetNotEditable} from '../events/condition.js';
 
 /**
  * @typedef {Object} Options
  * @property {number} [duration=100] Animation duration in milliseconds.
  * @property {import("../events/condition.js").Condition} [condition] A function that
  * takes an {@link module:ol/MapBrowserEvent~MapBrowserEvent} and returns a
- * boolean to indicate whether that event should be handled. Default is
- * {@link module:ol/events/condition.targetNotEditable}.
+ * boolean to indicate whether that event should be handled. The default condition is
+ * that {@link module:ol/events/condition.targetNotEditable} is fulfilled and that
+ * the platform modifier key isn't pressed
+ * (!{@link module:ol/events/condition.platformModifierKey}).
  * @property {number} [delta=1] The zoom level delta on each key press.
  */
 
@@ -30,18 +32,25 @@ import {targetNotEditable} from '../events/condition.js';
  */
 class KeyboardZoom extends Interaction {
   /**
-   * @param {Options} [opt_options] Options.
+   * @param {Options} [options] Options.
    */
-  constructor(opt_options) {
+  constructor(options) {
     super();
 
-    const options = opt_options ? opt_options : {};
+    options = options ? options : {};
 
     /**
      * @private
      * @type {import("../events/condition.js").Condition}
      */
-    this.condition_ = options.condition ? options.condition : targetNotEditable;
+    this.condition_ = options.condition
+      ? options.condition
+      : function (mapBrowserEvent) {
+          return (
+            !platformModifierKey(mapBrowserEvent) &&
+            targetNotEditable(mapBrowserEvent)
+          );
+        };
 
     /**
      * @private
@@ -57,12 +66,11 @@ class KeyboardZoom extends Interaction {
   }
 
   /**
-   * Handles the {@link module:ol/MapBrowserEvent map browser event} if it was a
+   * Handles the {@link module:ol/MapBrowserEvent~MapBrowserEvent map browser event} if it was a
    * `KeyEvent`, and decides whether to zoom in or out (depending on whether the
    * key pressed was '+' or '-').
    * @param {import("../MapBrowserEvent.js").default} mapBrowserEvent Map browser event.
    * @return {boolean} `false` to stop event propagation.
-   * @this {KeyboardZoom}
    */
   handleEvent(mapBrowserEvent) {
     let stopEvent = false;
@@ -73,14 +81,10 @@ class KeyboardZoom extends Interaction {
       const keyEvent = /** @type {KeyboardEvent} */ (
         mapBrowserEvent.originalEvent
       );
-      const charCode = keyEvent.charCode;
-      if (
-        this.condition_(mapBrowserEvent) &&
-        (charCode == '+'.charCodeAt(0) || charCode == '-'.charCodeAt(0))
-      ) {
+      const key = keyEvent.key;
+      if (this.condition_(mapBrowserEvent) && (key === '+' || key === '-')) {
         const map = mapBrowserEvent.map;
-        const delta =
-          charCode == '+'.charCodeAt(0) ? this.delta_ : -this.delta_;
+        const delta = key === '+' ? this.delta_ : -this.delta_;
         const view = map.getView();
         zoomByDelta(view, delta, undefined, this.duration_);
         keyEvent.preventDefault();

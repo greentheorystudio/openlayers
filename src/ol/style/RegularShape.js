@@ -9,6 +9,7 @@ import {asColorLike} from '../colorlike.js';
 import {createCanvasContext2D} from '../dom.js';
 import {
   defaultFillStyle,
+  defaultLineCap,
   defaultLineJoin,
   defaultLineWidth,
   defaultMiterLimit,
@@ -24,13 +25,15 @@ import {
  * @property {number} [radius] Radius of a regular polygon.
  * @property {number} [radius1] First radius of a star. Ignored if radius is set.
  * @property {number} [radius2] Second radius of a star.
- * @property {number} [angle=0] Shape's angle in radians. A value of 0 will have one of the shape's point facing up.
- * @property {Array<number>} [displacement=[0,0]] Displacement of the shape
+ * @property {number} [angle=0] Shape's angle in radians. A value of 0 will have one of the shape's points facing up.
+ * @property {Array<number>} [displacement=[0, 0]] Displacement of the shape in pixels.
+ * Positive values will shift the shape right and up.
  * @property {import("./Stroke.js").default} [stroke] Stroke style.
  * @property {number} [rotation=0] Rotation in radians (positive rotation clockwise).
  * @property {boolean} [rotateWithView=false] Whether to rotate the shape with the view.
  * @property {number|import("../size.js").Size} [scale=1] Scale. Unless two dimensional scaling is required a better
  * result may be obtained with appropriate settings for `radius`, `radius1` and `radius2`.
+ * @property {"declutter"|"obstacle"|"none"|undefined} [declutterMode] Declutter mode.
  */
 
 /**
@@ -38,7 +41,8 @@ import {
  * @property {import("../colorlike.js").ColorLike} [strokeStyle] StrokeStyle.
  * @property {number} strokeWidth StrokeWidth.
  * @property {number} size Size.
- * @property {Array<number>} lineDash LineDash.
+ * @property {CanvasLineCap} lineCap LineCap.
+ * @property {Array<number>|null} lineDash LineDash.
  * @property {number} lineDashOffset LineDashOffset.
  * @property {CanvasLineJoin} lineJoin LineJoin.
  * @property {number} miterLimit MiterLimit.
@@ -69,6 +73,7 @@ class RegularShape extends ImageStyle {
       scale: options.scale !== undefined ? options.scale : 1,
       displacement:
         options.displacement !== undefined ? options.displacement : [0, 0],
+      declutterMode: options.declutterMode,
     });
 
     /**
@@ -159,6 +164,7 @@ class RegularShape extends ImageStyle {
       rotateWithView: this.getRotateWithView(),
       scale: Array.isArray(scale) ? scale.slice() : scale,
       displacement: this.getDisplacement().slice(),
+      declutterMode: this.getDeclutterMode(),
     });
     style.setOpacity(this.getOpacity());
     return style;
@@ -176,7 +182,13 @@ class RegularShape extends ImageStyle {
       return null;
     }
     const displacement = this.getDisplacement();
-    return [size[0] / 2 - displacement[0], size[1] / 2 + displacement[1]];
+    const scale = this.getScaleArray();
+    // anchor is scaled by renderer but displacement should not be scaled
+    // so divide by scale here
+    return [
+      size[0] / 2 - displacement[0] / scale[0],
+      size[1] / 2 + displacement[1] / scale[1],
+    ];
   }
 
   /**
@@ -195,6 +207,16 @@ class RegularShape extends ImageStyle {
    */
   getFill() {
     return this.fill_;
+  }
+
+  /**
+   * Set the fill style.
+   * @param {import("./Fill.js").default} fill Fill style.
+   * @api
+   */
+  setFill(fill) {
+    this.fill_ = fill;
+    this.render();
   }
 
   /**
@@ -307,6 +329,16 @@ class RegularShape extends ImageStyle {
   }
 
   /**
+   * Set the stroke style.
+   * @param {import("./Stroke.js").default} stroke Stroke style.
+   * @api
+   */
+  setStroke(stroke) {
+    this.stroke_ = stroke;
+    this.render();
+  }
+
+  /**
    * @param {function(import("../events/Event.js").default): void} listener Listener function.
    */
   listenImageChange(listener) {}
@@ -377,7 +409,7 @@ class RegularShape extends ImageStyle {
     if (lineJoin === 'miter' && miterRatio <= miterLimit) {
       return miterRatio * strokeWidth;
     }
-    // Calculate the distnce from center to the stroke corner where
+    // Calculate the distance from center to the stroke corner where
     // it was cut short because of the miter limit.
     //              l
     //        ----+---- <= distance from center to here is maxr
@@ -416,6 +448,7 @@ class RegularShape extends ImageStyle {
    * @protected
    */
   createRenderOptions() {
+    let lineCap = defaultLineCap;
     let lineJoin = defaultLineJoin;
     let miterLimit = 0;
     let lineDash = null;
@@ -439,6 +472,10 @@ class RegularShape extends ImageStyle {
       if (lineJoin === undefined) {
         lineJoin = defaultLineJoin;
       }
+      lineCap = this.stroke_.getLineCap();
+      if (lineCap === undefined) {
+        lineCap = defaultLineCap;
+      }
       miterLimit = this.stroke_.getMiterLimit();
       if (miterLimit === undefined) {
         miterLimit = defaultMiterLimit;
@@ -453,6 +490,7 @@ class RegularShape extends ImageStyle {
       strokeStyle: strokeStyle,
       strokeWidth: strokeWidth,
       size: size,
+      lineCap: lineCap,
       lineDash: lineDash,
       lineDashOffset: lineDashOffset,
       lineJoin: lineJoin,
@@ -467,6 +505,7 @@ class RegularShape extends ImageStyle {
     this.renderOptions_ = this.createRenderOptions();
     const size = this.renderOptions_.size;
     this.canvas_ = {};
+    this.hitDetectionCanvas_ = null;
     this.size_ = [size, size];
   }
 
@@ -494,10 +533,11 @@ class RegularShape extends ImageStyle {
     if (this.stroke_) {
       context.strokeStyle = renderOptions.strokeStyle;
       context.lineWidth = renderOptions.strokeWidth;
-      if (context.setLineDash && renderOptions.lineDash) {
+      if (renderOptions.lineDash) {
         context.setLineDash(renderOptions.lineDash);
         context.lineDashOffset = renderOptions.lineDashOffset;
       }
+      context.lineCap = renderOptions.lineCap;
       context.lineJoin = renderOptions.lineJoin;
       context.miterLimit = renderOptions.miterLimit;
       context.stroke();

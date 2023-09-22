@@ -2,16 +2,14 @@
  * @module ol/renderer/canvas/ImageLayer
  */
 import CanvasLayerRenderer from './Layer.js';
+import ImageState from '../../ImageState.js';
 import ViewHint from '../../ViewHint.js';
-import {ENABLE_RASTER_REPROJECTION} from '../../reproj/common.js';
-import {IMAGE_SMOOTHING_DISABLED, IMAGE_SMOOTHING_ENABLED} from './common.js';
 import {
   apply as applyTransform,
   compose as composeTransform,
   makeInverse,
   toString as toTransformString,
 } from '../../transform.js';
-import {assign} from '../../obj.js';
 import {
   containsCoordinate,
   containsExtent,
@@ -37,13 +35,13 @@ class CanvasImageLayerRenderer extends CanvasLayerRenderer {
 
     /**
      * @protected
-     * @type {?import("../../ImageBase.js").default}
+     * @type {?import("../../Image.js").default}
      */
     this.image_ = null;
   }
 
   /**
-   * @return {HTMLCanvasElement|HTMLImageElement|HTMLVideoElement} Image.
+   * @return {import('../../DataTile.js').ImageLike} Image.
    */
   getImage() {
     return !this.image_ ? null : this.image_.getImage();
@@ -51,7 +49,7 @@ class CanvasImageLayerRenderer extends CanvasLayerRenderer {
 
   /**
    * Determine whether render should be called.
-   * @param {import("../../PluggableMap.js").FrameState} frameState Frame state.
+   * @param {import("../../Map.js").FrameState} frameState Frame state.
    * @return {boolean} Layer is ready to be rendered.
    */
   prepareFrame(frameState) {
@@ -78,21 +76,19 @@ class CanvasImageLayerRenderer extends CanvasLayerRenderer {
       !isEmpty(renderedExtent)
     ) {
       if (imageSource) {
-        let projection = viewState.projection;
-        if (!ENABLE_RASTER_REPROJECTION) {
-          const sourceProjection = imageSource.getProjection();
-          if (sourceProjection) {
-            projection = sourceProjection;
-          }
-        }
+        const projection = viewState.projection;
         const image = imageSource.getImage(
           renderedExtent,
           viewResolution,
           pixelRatio,
           projection
         );
-        if (image && this.loadImage(image)) {
-          this.image_ = image;
+        if (image) {
+          if (this.loadImage(image)) {
+            this.image_ = image;
+          } else if (image.getState() === ImageState.EMPTY) {
+            this.image_ = null;
+          }
         }
       } else {
         this.image_ = null;
@@ -149,7 +145,7 @@ class CanvasImageLayerRenderer extends CanvasLayerRenderer {
 
   /**
    * Render the layer.
-   * @param {import("../../PluggableMap.js").FrameState} frameState Frame state.
+   * @param {import("../../Map.js").FrameState} frameState Frame state.
    * @param {HTMLElement} target Target that may be used to render content to.
    * @return {HTMLElement} The rendered element.
    */
@@ -157,24 +153,26 @@ class CanvasImageLayerRenderer extends CanvasLayerRenderer {
     const image = this.image_;
     const imageExtent = image.getExtent();
     const imageResolution = image.getResolution();
+    const [imageResolutionX, imageResolutionY] = Array.isArray(imageResolution)
+      ? imageResolution
+      : [imageResolution, imageResolution];
     const imagePixelRatio = image.getPixelRatio();
     const layerState = frameState.layerStatesArray[frameState.layerIndex];
     const pixelRatio = frameState.pixelRatio;
     const viewState = frameState.viewState;
     const viewCenter = viewState.center;
     const viewResolution = viewState.resolution;
-    const size = frameState.size;
-    const scale =
-      (pixelRatio * imageResolution) / (viewResolution * imagePixelRatio);
+    const scaleX =
+      (pixelRatio * imageResolutionX) / (viewResolution * imagePixelRatio);
+    const scaleY =
+      (pixelRatio * imageResolutionY) / (viewResolution * imagePixelRatio);
 
-    let width = Math.round(size[0] * pixelRatio);
-    let height = Math.round(size[1] * pixelRatio);
+    const extent = frameState.extent;
+    const resolution = viewState.resolution;
     const rotation = viewState.rotation;
-    if (rotation) {
-      const size = Math.round(Math.sqrt(width * width + height * height));
-      width = size;
-      height = size;
-    }
+    // desired dimensions of the canvas in pixels
+    const width = Math.round((getWidth(extent) / resolution) * pixelRatio);
+    const height = Math.round((getHeight(extent) / resolution) * pixelRatio);
 
     // set forward and inverse pixel transforms
     composeTransform(
@@ -191,12 +189,7 @@ class CanvasImageLayerRenderer extends CanvasLayerRenderer {
 
     const canvasTransform = toTransformString(this.pixelTransform);
 
-    this.useContainer(
-      target,
-      canvasTransform,
-      layerState.opacity,
-      this.getBackground(frameState)
-    );
+    this.useContainer(target, canvasTransform, this.getBackground(frameState));
 
     const context = this.context;
     const canvas = context.canvas;
@@ -229,20 +222,20 @@ class CanvasImageLayerRenderer extends CanvasLayerRenderer {
       this.tempTransform,
       width / 2,
       height / 2,
-      scale,
-      scale,
+      scaleX,
+      scaleY,
       0,
-      (imagePixelRatio * (imageExtent[0] - viewCenter[0])) / imageResolution,
-      (imagePixelRatio * (viewCenter[1] - imageExtent[3])) / imageResolution
+      (imagePixelRatio * (imageExtent[0] - viewCenter[0])) / imageResolutionX,
+      (imagePixelRatio * (viewCenter[1] - imageExtent[3])) / imageResolutionY
     );
 
-    this.renderedResolution = (imageResolution * pixelRatio) / imagePixelRatio;
+    this.renderedResolution = (imageResolutionY * pixelRatio) / imagePixelRatio;
 
     const dw = img.width * transform[0];
     const dh = img.height * transform[3];
 
     if (!this.getLayer().getSource().getInterpolate()) {
-      assign(context, IMAGE_SMOOTHING_DISABLED);
+      context.imageSmoothingEnabled = false;
     }
 
     this.preRender(context, frameState);
@@ -255,17 +248,7 @@ class CanvasImageLayerRenderer extends CanvasLayerRenderer {
         previousAlpha = context.globalAlpha;
         context.globalAlpha = opacity;
       }
-      context.drawImage(
-        img,
-        0,
-        0,
-        +img.width,
-        +img.height,
-        Math.round(dx),
-        Math.round(dy),
-        Math.round(dw),
-        Math.round(dh)
-      );
+      context.drawImage(img, 0, 0, +img.width, +img.height, dx, dy, dw, dh);
       if (opacity !== 1) {
         context.globalAlpha = previousAlpha;
       }
@@ -275,7 +258,7 @@ class CanvasImageLayerRenderer extends CanvasLayerRenderer {
     if (clipped) {
       context.restore();
     }
-    assign(context, IMAGE_SMOOTHING_ENABLED);
+    context.imageSmoothingEnabled = true;
 
     if (canvasTransform !== canvas.style.transform) {
       canvas.style.transform = canvasTransform;

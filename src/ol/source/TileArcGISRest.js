@@ -3,9 +3,8 @@
  */
 
 import TileImage from './TileImage.js';
-import {appendParams} from '../uri.js';
-import {assign} from '../obj.js';
 import {createEmpty} from '../extent.js';
+import {getRequestUrl} from './arcgisRest.js';
 import {modulo} from '../math.js';
 import {scale as scaleSize, toSize} from '../size.js';
 import {hash as tileCoordHash} from '../tilecoord.js';
@@ -17,7 +16,6 @@ import {hash as tileCoordHash} from '../tilecoord.js';
  * @property {null|string} [crossOrigin] The `crossOrigin` attribute for loaded images.  Note that
  * you must provide a `crossOrigin` value if you want to access pixel data with the Canvas renderer.
  * See https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image for more detail.
- * @property {boolean} [imageSmoothing=true] Deprecated.  Use the `interpolate` option instead.
  * @property {boolean} [interpolate=true] Use interpolated values when resampling.  By default,
  * linear interpolation is used when resampling.  Set to false to use the nearest neighbor instead.
  * @property {Object<string,*>} [params] ArcGIS Rest parameters. This field is optional. Service defaults will be
@@ -69,22 +67,16 @@ import {hash as tileCoordHash} from '../tilecoord.js';
  */
 class TileArcGISRest extends TileImage {
   /**
-   * @param {Options} [opt_options] Tile ArcGIS Rest options.
+   * @param {Options} [options] Tile ArcGIS Rest options.
    */
-  constructor(opt_options) {
-    const options = opt_options ? opt_options : {};
-
-    let interpolate =
-      options.imageSmoothing !== undefined ? options.imageSmoothing : true;
-    if (options.interpolate !== undefined) {
-      interpolate = options.interpolate;
-    }
+  constructor(options) {
+    options = options ? options : {};
 
     super({
       attributions: options.attributions,
       cacheSize: options.cacheSize,
       crossOrigin: options.crossOrigin,
-      interpolate: interpolate,
+      interpolate: options.interpolate,
       projection: options.projection,
       reprojectionErrorThreshold: options.reprojectionErrorThreshold,
       tileGrid: options.tileGrid,
@@ -162,23 +154,6 @@ class TileArcGISRest extends TileImage {
     if (!urls) {
       return undefined;
     }
-
-    // ArcGIS Server only wants the numeric portion of the projection ID.
-    // (if there is no numeric portion the entire projection code must
-    // form a valid ArcGIS SpatialReference definition).
-    const srid = projection
-      .getCode()
-      .split(/:(?=\d+$)/)
-      .pop();
-
-    params['SIZE'] = tileSize[0] + ',' + tileSize[1];
-    params['BBOX'] = tileExtent.join(',');
-    params['BBOXSR'] = srid;
-    params['IMAGESR'] = srid;
-    params['DPI'] = Math.round(
-      params['DPI'] ? params['DPI'] * pixelRatio : 90 * pixelRatio
-    );
-
     let url;
     if (urls.length == 1) {
       url = urls[0];
@@ -187,10 +162,16 @@ class TileArcGISRest extends TileImage {
       url = urls[index];
     }
 
-    const modifiedUrl = url
-      .replace(/MapServer\/?$/, 'MapServer/export')
-      .replace(/ImageServer\/?$/, 'ImageServer/exportImage');
-    return appendParams(modifiedUrl, params);
+    return getRequestUrl(
+      url,
+      tileExtent,
+      (
+        this.tileGrid || this.getTileGridForProjection(projection)
+      ).getResolution(tileCoord[0]),
+      pixelRatio,
+      projection,
+      params
+    );
   }
 
   /**
@@ -208,7 +189,7 @@ class TileArcGISRest extends TileImage {
    * @api
    */
   updateParams(params) {
-    assign(this.params_, params);
+    Object.assign(this.params_, params);
     this.setKey(this.getKeyForParams_());
   }
 
@@ -246,7 +227,7 @@ class TileArcGISRest extends TileImage {
       'FORMAT': 'PNG32',
       'TRANSPARENT': true,
     };
-    assign(baseParams, this.params_);
+    Object.assign(baseParams, this.params_);
 
     return this.getRequestUrl_(
       tileCoord,

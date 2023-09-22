@@ -3,11 +3,10 @@
  */
 import Layer from './Layer.js';
 import WebGLPointsLayerRenderer from '../renderer/webgl/PointsLayer.js';
-import {assign} from '../obj.js';
-import {parseLiteralStyle} from '../webgl/ShaderBuilder.js';
+import {parseLiteralStyle} from '../webgl/styleparser.js';
 
 /**
- * @template {import("../source/Vector.js").default<import("../geom/Point.js").default>} VectorSourceType
+ * @template {import("../source/Vector.js").default} VectorSourceType
  * @typedef {Object} Options
  * @property {import('../style/literal.js').LiteralStyle} style Literal style to apply to the layer features.
  * @property {string} [className='ol-layer'] A CSS class name to set to the layer element.
@@ -41,23 +40,18 @@ import {parseLiteralStyle} from '../webgl/ShaderBuilder.js';
  * Here are a few samples of literal style objects:
  * ```js
  * const style = {
- *   symbol: {
- *     symbolType: 'circle',
- *     size: 8,
- *     color: '#33AAFF',
- *     opacity: 0.9
- *   }
+ *   'circle-radius': 8,
+ *   'circle-fill-color': '#33AAFF',
+ *   'circle-opacity': 0.9
  * }
  * ```
  *
  * ```js
  * const style = {
- *   symbol: {
- *     symbolType: 'image',
- *     offset: [0, 12],
- *     size: [4, 8],
- *     src: '../static/exclamation-mark.png'
- *   }
+ *   'icon-src': '../static/exclamation-mark.png',
+ *   'icon-offset': [0, 12],
+ *   'icon-width': 4,
+ *   'icon-height': 8
  * }
  * ```
  *
@@ -68,7 +62,7 @@ import {parseLiteralStyle} from '../webgl/ShaderBuilder.js';
  * property on the layer object; for example, setting `title: 'My Title'` in the
  * options means that `title` is observable, and has get/set accessors.
  *
- * @template {import("../source/Vector.js").default<import("../geom/Point.js").default>} VectorSourceType
+ * @template {import("../source/Vector.js").default} VectorSourceType
  * @extends {Layer<VectorSourceType, WebGLPointsLayerRenderer>}
  * @fires import("../render/Event.js").RenderEvent
  */
@@ -77,18 +71,18 @@ class WebGLPointsLayer extends Layer {
    * @param {Options<VectorSourceType>} options Options.
    */
   constructor(options) {
-    const baseOptions = assign({}, options);
+    const baseOptions = Object.assign({}, options);
 
     super(baseOptions);
 
     /**
      * @private
-     * @type {import('../webgl/ShaderBuilder.js').StyleParseResult}
+     * @type {import('../webgl/styleparser.js').StyleParseResult}
      */
     this.parseResult_ = parseLiteralStyle(options.style);
 
     /**
-     * @type {Object<string, (string|number)>}
+     * @type {Object<string, (string|number|Array<number>|boolean)>}
      * @private
      */
     this.styleVariables_ = options.style.variables || {};
@@ -101,17 +95,21 @@ class WebGLPointsLayer extends Layer {
   }
 
   createRenderer() {
+    const attributes = Object.keys(this.parseResult_.attributes).map(
+      (name) => ({
+        name,
+        ...this.parseResult_.attributes[name],
+      })
+    );
     return new WebGLPointsLayerRenderer(this, {
       vertexShader: this.parseResult_.builder.getSymbolVertexShader(),
       fragmentShader: this.parseResult_.builder.getSymbolFragmentShader(),
-      hitVertexShader:
-        !this.hitDetectionDisabled_ &&
-        this.parseResult_.builder.getSymbolVertexShader(true),
-      hitFragmentShader:
-        !this.hitDetectionDisabled_ &&
-        this.parseResult_.builder.getSymbolFragmentShader(true),
+      hitDetectionEnabled: !this.hitDetectionDisabled_,
       uniforms: this.parseResult_.uniforms,
-      attributes: this.parseResult_.attributes,
+      attributes:
+        /** @type {Array<import('../renderer/webgl/PointsLayer.js').CustomAttribute>} */ (
+          attributes
+        ),
     });
   }
 
@@ -120,7 +118,7 @@ class WebGLPointsLayer extends Layer {
    * @param {Object<string, number>} variables Variables to update.
    */
   updateStyleVariables(variables) {
-    assign(this.styleVariables_, variables);
+    Object.assign(this.styleVariables_, variables);
     this.changed();
   }
 }

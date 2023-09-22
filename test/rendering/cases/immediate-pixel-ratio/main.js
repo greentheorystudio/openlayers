@@ -18,7 +18,6 @@ const pointStyle = new Style({
   image: new Icon({
     img: img,
     size: [10, 10],
-    imgSize: [10, 10],
   }),
 });
 const line = new LineString(coordinates);
@@ -69,8 +68,8 @@ new Map({
   view: new View({
     center: [256 / 2, -256 / 2],
     resolution: 1,
-    devicePixelRatio: 2,
   }),
+  pixelRatio: 2,
 });
 
 render();

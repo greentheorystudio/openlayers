@@ -16,13 +16,13 @@ class CanvasImageBuilder extends CanvasBuilder {
 
     /**
      * @private
-     * @type {HTMLCanvasElement|HTMLVideoElement|HTMLImageElement}
+     * @type {import('../../DataTile.js').ImageLike}
      */
     this.hitDetectionImage_ = null;
 
     /**
      * @private
-     * @type {HTMLCanvasElement|HTMLVideoElement|HTMLImageElement}
+     * @type {import('../../DataTile.js').ImageLike}
      */
     this.image_ = null;
 
@@ -93,6 +93,12 @@ class CanvasImageBuilder extends CanvasBuilder {
     this.width_ = undefined;
 
     /**
+     * @private
+     * @type {"declutter"|"obstacle"|"none"|undefined}
+     */
+    this.declutterMode_ = undefined;
+
+    /**
      * Data shared with a text builder for combined decluttering.
      * @private
      * @type {import("../canvas.js").DeclutterImageWithText}
@@ -123,8 +129,8 @@ class CanvasImageBuilder extends CanvasBuilder {
       this.anchorY_ * this.imagePixelRatio_,
       Math.ceil(this.height_ * this.imagePixelRatio_),
       this.opacity_,
-      this.originX_,
-      this.originY_,
+      this.originX_ * this.imagePixelRatio_,
+      this.originY_ * this.imagePixelRatio_,
       this.rotateWithView_,
       this.rotation_,
       [
@@ -132,6 +138,7 @@ class CanvasImageBuilder extends CanvasBuilder {
         (this.scale_[1] * this.pixelRatio) / this.imagePixelRatio_,
       ],
       Math.ceil(this.width_ * this.imagePixelRatio_),
+      this.declutterMode_,
       this.declutterImageWithText_,
     ]);
     this.hitDetectionInstructions.push([
@@ -143,13 +150,14 @@ class CanvasImageBuilder extends CanvasBuilder {
       this.anchorX_,
       this.anchorY_,
       this.height_,
-      this.opacity_,
+      1,
       this.originX_,
       this.originY_,
       this.rotateWithView_,
       this.rotation_,
       this.scale_,
       this.width_,
+      this.declutterMode_,
       this.declutterImageWithText_,
     ]);
     this.endGeometry(feature);
@@ -178,8 +186,8 @@ class CanvasImageBuilder extends CanvasBuilder {
       this.anchorY_ * this.imagePixelRatio_,
       Math.ceil(this.height_ * this.imagePixelRatio_),
       this.opacity_,
-      this.originX_,
-      this.originY_,
+      this.originX_ * this.imagePixelRatio_,
+      this.originY_ * this.imagePixelRatio_,
       this.rotateWithView_,
       this.rotation_,
       [
@@ -187,6 +195,7 @@ class CanvasImageBuilder extends CanvasBuilder {
         (this.scale_[1] * this.pixelRatio) / this.imagePixelRatio_,
       ],
       Math.ceil(this.width_ * this.imagePixelRatio_),
+      this.declutterMode_,
       this.declutterImageWithText_,
     ]);
     this.hitDetectionInstructions.push([
@@ -198,13 +207,14 @@ class CanvasImageBuilder extends CanvasBuilder {
       this.anchorX_,
       this.anchorY_,
       this.height_,
-      this.opacity_,
+      1,
       this.originX_,
       this.originY_,
       this.rotateWithView_,
       this.rotation_,
       this.scale_,
       this.width_,
+      this.declutterMode_,
       this.declutterImageWithText_,
     ]);
     this.endGeometry(feature);
@@ -234,28 +244,27 @@ class CanvasImageBuilder extends CanvasBuilder {
 
   /**
    * @param {import("../../style/Image.js").default} imageStyle Image style.
-   * @param {Object} [opt_sharedData] Shared data.
+   * @param {Object} [sharedData] Shared data.
    */
-  setImageStyle(imageStyle, opt_sharedData) {
+  setImageStyle(imageStyle, sharedData) {
     const anchor = imageStyle.getAnchor();
     const size = imageStyle.getSize();
-    const hitDetectionImage = imageStyle.getHitDetectionImage();
-    const image = imageStyle.getImage(this.pixelRatio);
     const origin = imageStyle.getOrigin();
     this.imagePixelRatio_ = imageStyle.getPixelRatio(this.pixelRatio);
     this.anchorX_ = anchor[0];
     this.anchorY_ = anchor[1];
-    this.hitDetectionImage_ = hitDetectionImage;
-    this.image_ = image;
+    this.hitDetectionImage_ = imageStyle.getHitDetectionImage();
+    this.image_ = imageStyle.getImage(this.pixelRatio);
     this.height_ = size[1];
     this.opacity_ = imageStyle.getOpacity();
-    this.originX_ = origin[0] * this.imagePixelRatio_;
-    this.originY_ = origin[1] * this.imagePixelRatio_;
+    this.originX_ = origin[0];
+    this.originY_ = origin[1];
     this.rotateWithView_ = imageStyle.getRotateWithView();
     this.rotation_ = imageStyle.getRotation();
     this.scale_ = imageStyle.getScaleArray();
     this.width_ = size[0];
-    this.declutterImageWithText_ = opt_sharedData;
+    this.declutterMode_ = imageStyle.getDeclutterMode();
+    this.declutterImageWithText_ = sharedData;
   }
 }
 

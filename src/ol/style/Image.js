@@ -11,7 +11,7 @@ import {toSize} from '../size.js';
  * @property {number} rotation Rotation.
  * @property {number|import("../size.js").Size} scale Scale.
  * @property {Array<number>} displacement Displacement.
- */
+ * @property {"declutter"|"obstacle"|"none"|undefined} declutterMode Declutter mode: `declutter`, `obstacle`, 'none */
 
 /**
  * @classdesc
@@ -61,6 +61,12 @@ class ImageStyle {
      * @type {Array<number>}
      */
     this.displacement_ = options.displacement;
+
+    /**
+     * @private
+     * @type {"declutter"|"obstacle"|"none"|undefined}
+     */
+    this.declutterMode_ = options.declutterMode;
   }
 
   /**
@@ -76,6 +82,7 @@ class ImageStyle {
       rotation: this.getRotation(),
       rotateWithView: this.getRotateWithView(),
       displacement: this.getDisplacement().slice(),
+      declutterMode: this.getDeclutterMode(),
     });
   }
 
@@ -133,6 +140,15 @@ class ImageStyle {
   }
 
   /**
+   * Get the declutter mode of the shape
+   * @return {"declutter"|"obstacle"|"none"|undefined} Shape's declutter mode
+   * @api
+   */
+  getDeclutterMode() {
+    return this.declutterMode_;
+  }
+
+  /**
    * Get the anchor point in pixels. The anchor determines the center point for the
    * symbolizer.
    * @abstract
@@ -146,7 +162,7 @@ class ImageStyle {
    * Get the image element for the symbolizer.
    * @abstract
    * @param {number} pixelRatio Pixel ratio.
-   * @return {HTMLCanvasElement|HTMLVideoElement|HTMLImageElement} Image element.
+   * @return {import('../DataTile.js').ImageLike} Image element.
    */
   getImage(pixelRatio) {
     return abstract();
@@ -154,7 +170,7 @@ class ImageStyle {
 
   /**
    * @abstract
-   * @return {HTMLCanvasElement|HTMLVideoElement|HTMLImageElement} Image element.
+   * @return {import('../DataTile.js').ImageLike} Image element.
    */
   getHitDetectionImage() {
     return abstract();
@@ -242,6 +258,7 @@ class ImageStyle {
   setRotation(rotation) {
     this.rotation_ = rotation;
   }
+
   /**
    * Set the scale.
    *

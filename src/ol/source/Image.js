@@ -2,13 +2,23 @@
  * @module ol/source/Image
  */
 import Event from '../events/Event.js';
+import EventType from '../events/EventType.js';
 import ImageState from '../ImageState.js';
+import ImageWrapper from '../Image.js';
 import ReprojImage from '../reproj/Image.js';
 import Source from './Source.js';
-import {ENABLE_RASTER_REPROJECTION} from '../reproj/common.js';
-import {abstract} from '../util.js';
-import {equals} from '../extent.js';
+import {DECIMALS} from './common.js';
+import {ceil} from '../math.js';
+import {
+  containsExtent,
+  equals,
+  getCenter,
+  getForViewAndSize,
+  getHeight,
+  getWidth,
+} from '../extent.js';
 import {equivalent} from '../proj.js';
+import {fromResolutionLike} from '../resolution.js';
 import {linearFindNearest} from '../array.js';
 
 /**
@@ -75,20 +85,20 @@ export class ImageSourceEvent extends Event {
 /**
  * @typedef {Object} Options
  * @property {import("./Source.js").AttributionLike} [attributions] Attributions.
- * @property {boolean} [imageSmoothing=true] Deprecated.  Use the `interpolate` option instead.
  * @property {boolean} [interpolate=true] Use interpolated values when resampling.  By default,
  * linear interpolation is used when resampling.  Set to false to use the nearest neighbor instead.
+ * @property {import("../Image.js").Loader} [loader] Loader. Can either be a custom loader, or one of the
+ * loaders created with a `createLoader()` function ({@link module:ol/source/wms.createLoader wms},
+ * {@link module:ol/source/arcgisRest.createLoader arcgisRest}, {@link module:ol/source/mapguide.createLoader mapguide},
+ * {@link module:ol/source/static.createLoader static}).
  * @property {import("../proj.js").ProjectionLike} [projection] Projection.
  * @property {Array<number>} [resolutions] Resolutions.
- * @property {import("./State.js").default} [state] State.
+ * @property {import("./Source.js").State} [state] State.
  */
 
 /**
  * @classdesc
- * Abstract base class; normally only used for creating subclasses and not
- * instantiated in apps.
  * Base class for sources providing a single image.
- * @abstract
  * @fires module:ol/source/Image.ImageSourceEvent
  * @api
  */
@@ -97,17 +107,12 @@ class ImageSource extends Source {
    * @param {Options} options Single image source options.
    */
   constructor(options) {
-    let interpolate =
-      options.imageSmoothing !== undefined ? options.imageSmoothing : true;
-    if (options.interpolate !== undefined) {
-      interpolate = options.interpolate;
-    }
-
     super({
       attributions: options.attributions,
       projection: options.projection,
       state: options.state,
-      interpolate: interpolate,
+      interpolate:
+        options.interpolate !== undefined ? options.interpolate : true,
     });
 
     /***
@@ -124,6 +129,12 @@ class ImageSource extends Source {
      * @type {ImageSourceOnSignature<void>}
      */
     this.un;
+
+    /**
+     * @protected
+     * @type {import("../Image.js").Loader}
+     */
+    this.loader = options.loader || null;
 
     /**
      * @private
@@ -143,6 +154,30 @@ class ImageSource extends Source {
      * @type {number}
      */
     this.reprojectedRevision_ = 0;
+
+    /**
+     * @protected
+     * @type {import("../Image.js").default}
+     */
+    this.image = null;
+
+    /**
+     * @private
+     * @type {import("../extent.js").Extent}
+     */
+    this.wantedExtent_;
+
+    /**
+     * @private
+     * @type {number}
+     */
+    this.wantedResolution_;
+
+    /**
+     * @private
+     * @type {boolean}
+     */
+    this.static_ = options.loader ? options.loader.length === 0 : false;
   }
 
   /**
@@ -153,14 +188,22 @@ class ImageSource extends Source {
   }
 
   /**
+   * @param {Array<number>|null} resolutions Resolutions.
+   */
+  setResolutions(resolutions) {
+    this.resolutions_ = resolutions;
+  }
+
+  /**
    * @protected
    * @param {number} resolution Resolution.
    * @return {number} Resolution.
    */
   findNearestResolution(resolution) {
-    if (this.resolutions_) {
-      const idx = linearFindNearest(this.resolutions_, resolution, 0);
-      resolution = this.resolutions_[idx];
+    const resolutions = this.getResolutions();
+    if (resolutions) {
+      const idx = linearFindNearest(resolutions, resolution, 0);
+      resolution = resolutions[idx];
     }
     return resolution;
   }
@@ -170,12 +213,11 @@ class ImageSource extends Source {
    * @param {number} resolution Resolution.
    * @param {number} pixelRatio Pixel ratio.
    * @param {import("../proj/Projection.js").default} projection Projection.
-   * @return {import("../ImageBase.js").default} Single image.
+   * @return {import("../Image.js").default} Single image.
    */
   getImage(extent, resolution, pixelRatio, projection) {
     const sourceProjection = this.getProjection();
     if (
-      !ENABLE_RASTER_REPROJECTION ||
       !sourceProjection ||
       !projection ||
       equivalent(sourceProjection, projection)
@@ -183,41 +225,35 @@ class ImageSource extends Source {
       if (sourceProjection) {
         projection = sourceProjection;
       }
+
       return this.getImageInternal(extent, resolution, pixelRatio, projection);
-    } else {
-      if (this.reprojectedImage_) {
-        if (
-          this.reprojectedRevision_ == this.getRevision() &&
-          equivalent(this.reprojectedImage_.getProjection(), projection) &&
-          this.reprojectedImage_.getResolution() == resolution &&
-          equals(this.reprojectedImage_.getExtent(), extent)
-        ) {
-          return this.reprojectedImage_;
-        }
-        this.reprojectedImage_.dispose();
-        this.reprojectedImage_ = null;
-      }
-
-      this.reprojectedImage_ = new ReprojImage(
-        sourceProjection,
-        projection,
-        extent,
-        resolution,
-        pixelRatio,
-        function (extent, resolution, pixelRatio) {
-          return this.getImageInternal(
-            extent,
-            resolution,
-            pixelRatio,
-            sourceProjection
-          );
-        }.bind(this),
-        this.getInterpolate()
-      );
-      this.reprojectedRevision_ = this.getRevision();
-
-      return this.reprojectedImage_;
     }
+    if (this.reprojectedImage_) {
+      if (
+        this.reprojectedRevision_ == this.getRevision() &&
+        equivalent(this.reprojectedImage_.getProjection(), projection) &&
+        this.reprojectedImage_.getResolution() == resolution &&
+        equals(this.reprojectedImage_.getExtent(), extent)
+      ) {
+        return this.reprojectedImage_;
+      }
+      this.reprojectedImage_.dispose();
+      this.reprojectedImage_ = null;
+    }
+
+    this.reprojectedImage_ = new ReprojImage(
+      sourceProjection,
+      projection,
+      extent,
+      resolution,
+      pixelRatio,
+      (extent, resolution, pixelRatio) =>
+        this.getImageInternal(extent, resolution, pixelRatio, sourceProjection),
+      this.getInterpolate()
+    );
+    this.reprojectedRevision_ = this.getRevision();
+
+    return this.reprojectedImage_;
   }
 
   /**
@@ -226,11 +262,41 @@ class ImageSource extends Source {
    * @param {number} resolution Resolution.
    * @param {number} pixelRatio Pixel ratio.
    * @param {import("../proj/Projection.js").default} projection Projection.
-   * @return {import("../ImageBase.js").default} Single image.
+   * @return {import("../Image.js").default} Single image.
    * @protected
    */
   getImageInternal(extent, resolution, pixelRatio, projection) {
-    return abstract();
+    if (this.loader) {
+      const requestExtent = getRequestExtent(extent, resolution, pixelRatio, 1);
+      const requestResolution = this.findNearestResolution(resolution);
+      if (
+        this.image &&
+        (this.static_ ||
+          (((this.wantedExtent_ &&
+            containsExtent(this.wantedExtent_, requestExtent)) ||
+            containsExtent(this.image.getExtent(), requestExtent)) &&
+            ((this.wantedResolution_ &&
+              fromResolutionLike(this.wantedResolution_) ===
+                requestResolution) ||
+              fromResolutionLike(this.image.getResolution()) ===
+                requestResolution)))
+      ) {
+        return this.image;
+      }
+      this.wantedExtent_ = requestExtent;
+      this.wantedResolution_ = requestResolution;
+      this.image = new ImageWrapper(
+        requestExtent,
+        requestResolution,
+        pixelRatio,
+        this.loader
+      );
+      this.image.addEventListener(
+        EventType.CHANGE,
+        this.handleImageChange.bind(this)
+      );
+    }
+    return this.image;
   }
 
   /**
@@ -240,27 +306,25 @@ class ImageSource extends Source {
    */
   handleImageChange(event) {
     const image = /** @type {import("../Image.js").default} */ (event.target);
+    let type;
     switch (image.getState()) {
       case ImageState.LOADING:
         this.loading = true;
-        this.dispatchEvent(
-          new ImageSourceEvent(ImageSourceEventType.IMAGELOADSTART, image)
-        );
+        type = ImageSourceEventType.IMAGELOADSTART;
         break;
       case ImageState.LOADED:
         this.loading = false;
-        this.dispatchEvent(
-          new ImageSourceEvent(ImageSourceEventType.IMAGELOADEND, image)
-        );
+        type = ImageSourceEventType.IMAGELOADEND;
         break;
       case ImageState.ERROR:
         this.loading = false;
-        this.dispatchEvent(
-          new ImageSourceEvent(ImageSourceEventType.IMAGELOADERROR, image)
-        );
+        type = ImageSourceEventType.IMAGELOADERROR;
         break;
       default:
-      // pass
+        return;
+    }
+    if (this.hasListener(type)) {
+      this.dispatchEvent(new ImageSourceEvent(type, image));
     }
   }
 }
@@ -273,6 +337,29 @@ class ImageSource extends Source {
  */
 export function defaultImageLoadFunction(image, src) {
   /** @type {HTMLImageElement|HTMLVideoElement} */ (image.getImage()).src = src;
+}
+
+/**
+ * Adjusts the extent so it aligns with pixel boundaries.
+ * @param {import("../extent.js").Extent} extent Extent.
+ * @param {number} resolution Reolution.
+ * @param {number} pixelRatio Pixel ratio.
+ * @param {number} ratio Ratio between request size and view size.
+ * @return {import("../extent.js").Extent} Request extent.
+ */
+export function getRequestExtent(extent, resolution, pixelRatio, ratio) {
+  const imageResolution = resolution / pixelRatio;
+  const center = getCenter(extent);
+  const viewWidth = ceil(getWidth(extent) / imageResolution, DECIMALS);
+  const viewHeight = ceil(getHeight(extent) / imageResolution, DECIMALS);
+  const marginWidth = ceil(((ratio - 1) * viewWidth) / 2, DECIMALS);
+  const requestWidth = viewWidth + 2 * marginWidth;
+  const marginHeight = ceil(((ratio - 1) * viewHeight) / 2, DECIMALS);
+  const requestHeight = viewHeight + 2 * marginHeight;
+  return getForViewAndSize(center, imageResolution, 0, [
+    requestWidth,
+    requestHeight,
+  ]);
 }
 
 export default ImageSource;
