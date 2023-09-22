@@ -20,6 +20,7 @@ export {default as ImageWMS} from './source/ImageWMS.js';
 export {default as OGCMapTile} from './source/OGCMapTile.js';
 export {default as OGCVectorTile} from './source/OGCVectorTile.js';
 export {default as OSM} from './source/OSM.js';
+export {default as PropertyCluster} from './source/PropertyCluster.js';
 export {default as Raster} from './source/Raster.js';
 export {default as Source} from './source/Source.js';
 export {default as StadiaMaps} from './source/StadiaMaps.js';
