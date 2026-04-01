@@ -5,10 +5,10 @@
 
 import Event from '../events/Event.js';
 import EventType from '../events/EventType.js';
-import Interaction from './Interaction.js';
+import {listen, unlistenByKey} from '../events.js';
 import {TRUE} from '../functions.js';
 import {get as getProjection, getUserProjection} from '../proj.js';
-import {listen, unlistenByKey} from '../events.js';
+import Interaction from './Interaction.js';
 
 /**
  * @typedef {Object} Options
@@ -75,11 +75,11 @@ export class DragAndDropEvent extends Event {
 
 /***
  * @template Return
- * @typedef {import("../Observable").OnSignature<import("../Observable").EventTypes, import("../events/Event.js").default, Return> &
- *   import("../Observable").OnSignature<import("../ObjectEventType").Types|
- *     'change:active', import("../Object").ObjectEvent, Return> &
- *   import("../Observable").OnSignature<'addfeatures', DragAndDropEvent, Return> &
- *   import("../Observable").CombinedOnSignature<import("../Observable").EventTypes|import("../ObjectEventType").Types|
+ * @typedef {import("../Observable.js").OnSignature<import("../Observable.js").EventTypes, import("../events/Event.js").default, Return> &
+ *   import("../Observable.js").OnSignature<import("../ObjectEventType.js").Types|
+ *     'change:active', import("../Object.js").ObjectEvent, Return> &
+ *   import("../Observable.js").OnSignature<'addfeatures', DragAndDropEvent, Return> &
+ *   import("../Observable.js").CombinedOnSignature<import("../Observable.js").EventTypes|import("../ObjectEventType.js").Types|
  *     'change:active'|'addfeatures', Return>} DragAndDropOnSignature
  */
 
@@ -103,12 +103,12 @@ class DragAndDrop extends Interaction {
     });
 
     /***
-     * @type {DragAndDropOnSignature<import("../events").EventsKey>}
+     * @type {DragAndDropOnSignature<import("../events.js").EventsKey>}
      */
     this.on;
 
     /***
-     * @type {DragAndDropOnSignature<import("../events").EventsKey>}
+     * @type {DragAndDropOnSignature<import("../events.js").EventsKey>}
      */
     this.once;
 
@@ -176,16 +176,6 @@ class DragAndDrop extends Interaction {
   handleResult_(file, event) {
     const result = event.target.result;
     const map = this.getMap();
-    const filename = file.name.split('.');
-    const fileType = filename.pop();
-    if (fileType === 'zip' || fileType === 'tif' || fileType === 'tiff') {
-      this.dispatchEvent(
-          new DragAndDropEvent(
-              DragAndDropEventType.ADD_FEATURES,
-              file
-          )
-      );
-    }
     let projection = this.projection_;
     if (!projection) {
       projection = getUserProjection();
@@ -219,8 +209,8 @@ class DragAndDrop extends Interaction {
             DragAndDropEventType.ADD_FEATURES,
             file,
             features,
-            projection
-          )
+            projection,
+          ),
         );
         break;
       }
@@ -248,6 +238,7 @@ class DragAndDrop extends Interaction {
    * @param {boolean} active Active.
    * @observable
    * @api
+   * @override
    */
   setActive(active) {
     if (!this.getActive() && active) {
@@ -264,6 +255,7 @@ class DragAndDrop extends Interaction {
    * Subclasses may set up event handlers to get notified about changes to
    * the map here.
    * @param {import("../Map.js").default} map Map.
+   * @override
    */
   setMap(map) {
     this.unregisterListeners_();
@@ -286,7 +278,7 @@ class DragAndDrop extends Interaction {
         /** @type {Array<import("../Feature.js").default>} */
         (format.readFeatures(text, options))
       );
-    } catch (e) {
+    } catch {
       return null;
     }
   }
@@ -311,7 +303,7 @@ class DragAndDrop extends Interaction {
       const reader = new FileReader();
       reader.addEventListener(
         EventType.LOAD,
-        this.handleResult_.bind(this, file)
+        this.handleResult_.bind(this, file),
       );
       if (this.readAsBuffer_) {
         reader.readAsArrayBuffer(file);

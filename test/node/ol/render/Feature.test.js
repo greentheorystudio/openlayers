@@ -1,16 +1,14 @@
+import LineString from '../../../../src/ol/geom/LineString.js';
+import MultiLineString from '../../../../src/ol/geom/MultiLineString.js';
+import MultiPoint from '../../../../src/ol/geom/MultiPoint.js';
+import MultiPolygon from '../../../../src/ol/geom/MultiPolygon.js';
+import Point from '../../../../src/ol/geom/Point.js';
+import Polygon from '../../../../src/ol/geom/Polygon.js';
 import RenderFeature, {
   toFeature,
   toGeometry,
 } from '../../../../src/ol/render/Feature.js';
 import expect from '../../expect.js';
-import {
-  LineString,
-  MultiLineString,
-  MultiPoint,
-  MultiPolygon,
-  Point,
-  Polygon,
-} from '../../../../src/ol/geom.js';
 
 describe('ol/render/Feature', function () {
   describe('toGeometry()', function () {
@@ -20,12 +18,12 @@ describe('ol/render/Feature', function () {
         geometry.getType(),
         geometry.getFlatCoordinates().slice(),
         [],
-        2
+        2,
       );
       const converted = toGeometry(renderFeature);
       expect(converted).to.be.a(Point);
       expect(converted.getFlatCoordinates()).to.eql(
-        geometry.getFlatCoordinates()
+        geometry.getFlatCoordinates(),
       );
       expect(converted.getProperties()).to.eql({});
     });
@@ -38,12 +36,12 @@ describe('ol/render/Feature', function () {
         geometry.getType(),
         geometry.getFlatCoordinates().slice(),
         [],
-        2
+        2,
       );
       const converted = toGeometry(renderFeature);
       expect(converted).to.be.a(MultiPoint);
       expect(converted.getFlatCoordinates()).to.eql(
-        geometry.getFlatCoordinates()
+        geometry.getFlatCoordinates(),
       );
       expect(converted.getProperties()).to.eql({});
     });
@@ -56,12 +54,12 @@ describe('ol/render/Feature', function () {
         geometry.getType(),
         geometry.getFlatCoordinates().slice(),
         [],
-        2
+        2,
       );
       const converted = toGeometry(renderFeature);
       expect(converted).to.be.a(LineString);
       expect(converted.getFlatCoordinates()).to.eql(
-        geometry.getFlatCoordinates()
+        geometry.getFlatCoordinates(),
       );
       expect(converted.getProperties()).to.eql({});
     });
@@ -80,12 +78,12 @@ describe('ol/render/Feature', function () {
         geometry.getType(),
         geometry.getFlatCoordinates().slice(),
         geometry.getEnds().slice(),
-        2
+        2,
       );
       const converted = toGeometry(renderFeature);
       expect(converted).to.be.a(MultiLineString);
       expect(converted.getFlatCoordinates()).to.eql(
-        geometry.getFlatCoordinates()
+        geometry.getFlatCoordinates(),
       );
       expect(converted.getEnds()).to.eql(geometry.getEnds());
       expect(converted.getProperties()).to.eql({});
@@ -109,12 +107,12 @@ describe('ol/render/Feature', function () {
         geometry.getType(),
         geometry.getFlatCoordinates().slice(),
         geometry.getEnds().slice(),
-        2
+        2,
       );
       const converted = toGeometry(renderFeature);
       expect(converted).to.be.a(Polygon);
       expect(converted.getFlatCoordinates()).to.eql(
-        geometry.getFlatCoordinates()
+        geometry.getFlatCoordinates(),
       );
       expect(converted.getEnds()).to.eql(geometry.getEnds());
       expect(converted.getProperties()).to.eql({});
@@ -148,12 +146,12 @@ describe('ol/render/Feature', function () {
         'Polygon',
         geometry.getFlatCoordinates().slice(),
         geometry.getEndss().flat(1),
-        2
+        2,
       );
       const converted = toGeometry(renderFeature);
       expect(converted).to.be.a(MultiPolygon);
       expect(converted.getFlatCoordinates()).to.eql(
-        geometry.getFlatCoordinates()
+        geometry.getFlatCoordinates(),
       );
       expect(converted.getEndss()).to.eql(geometry.getEndss());
       expect(converted.getProperties()).to.eql({});
@@ -171,7 +169,7 @@ describe('ol/render/Feature', function () {
         [],
         2,
         properties,
-        id
+        id,
       );
 
       const got = feature.getPropertiesInternal();
@@ -190,13 +188,13 @@ describe('ol/render/Feature', function () {
         [],
         2,
         properties,
-        id
+        id,
       );
       const feature = toFeature(renderFeature);
       const converted = feature.getGeometry();
       expect(converted).to.be.a(Point);
       expect(converted.getFlatCoordinates()).to.eql(
-        geometry.getFlatCoordinates()
+        geometry.getFlatCoordinates(),
       );
       expect(feature.getId()).to.be(id);
       const props = feature.getProperties();
@@ -217,7 +215,7 @@ describe('ol/render/Feature', function () {
       [],
       2,
       properties,
-      id
+      id,
     );
     const geometryName = 'geom';
     const feature = toFeature(renderFeature, geometryName);
@@ -225,7 +223,7 @@ describe('ol/render/Feature', function () {
     expect(converted).to.be.a(LineString);
     expect(feature.get(geometryName)).to.be(converted);
     expect(converted.getFlatCoordinates()).to.eql(
-      geometry.getFlatCoordinates()
+      geometry.getFlatCoordinates(),
     );
     expect(feature.getId()).to.be(id);
     const props = feature.getProperties();
@@ -253,7 +251,7 @@ describe('ol/render/Feature', function () {
         geometry.getEnds().slice(),
         2,
         properties,
-        id
+        id,
       );
 
       const clone = feature.clone();

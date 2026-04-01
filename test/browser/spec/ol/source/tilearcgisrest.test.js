@@ -1,8 +1,8 @@
 import ImageTile from '../../../../../src/ol/ImageTile.js';
-import TileArcGISRest from '../../../../../src/ol/source/TileArcGISRest.js';
 import {get as getProjection} from '../../../../../src/ol/proj.js';
+import TileArcGISRest from '../../../../../src/ol/source/TileArcGISRest.js';
 
-describe('ol.source.TileArcGISRest', function () {
+describe('ol/source/TileArcGISRest', function () {
   let options;
   beforeEach(function () {
     options = {
@@ -120,6 +120,19 @@ describe('ol.source.TileArcGISRest', function () {
     });
   });
 
+  describe('#setParams', function () {
+    it('allows params to be set', function () {
+      const before = {test: 'before', foo: 'bar'};
+      const source = new TileArcGISRest({params: before});
+      source.setParams({test: 'after'});
+
+      const params = source.getParams();
+      expect(params).to.eql({test: 'after'});
+
+      expect(before).to.eql({test: 'before', foo: 'bar'});
+    });
+  });
+
   describe('#updateParams', function () {
     it('add a new param', function () {
       const source = new TileArcGISRest(options);
@@ -148,32 +161,26 @@ describe('ol.source.TileArcGISRest', function () {
     it('verify getting a param', function () {
       options.params.TEST = 'value';
       const source = new TileArcGISRest(options);
-
       const setParams = source.getParams();
-
       expect(setParams).to.eql({TEST: 'value'});
     });
 
     it('verify on adding a param', function () {
       options.params.TEST = 'value';
-
       const source = new TileArcGISRest(options);
       source.updateParams({'TEST2': 'newValue'});
-
       const setParams = source.getParams();
-
       expect(setParams).to.eql({TEST: 'value', TEST2: 'newValue'});
+      expect(options.params).to.eql({TEST: 'value'});
     });
 
     it('verify on update a param', function () {
       options.params.TEST = 'value';
-
       const source = new TileArcGISRest(options);
       source.updateParams({'TEST': 'newValue'});
-
       const setParams = source.getParams();
-
       expect(setParams).to.eql({TEST: 'newValue'});
+      expect(options.params).to.eql({TEST: 'value'});
     });
   });
 
@@ -258,7 +265,7 @@ describe('ol.source.TileArcGISRest', function () {
       const tileUrl = source.tileUrlFunction(
         [0, 0, 0],
         1,
-        getProjection('EPSG:4326')
+        getProjection('EPSG:4326'),
       );
       expect(tileUrl.indexOf(urls[0])).to.be(0);
     });

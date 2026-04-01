@@ -1,3 +1,4 @@
+import {spy as sinonSpy} from 'sinon';
 import Fill from '../../../../../src/ol/style/Fill.js';
 import RegularShape from '../../../../../src/ol/style/RegularShape.js';
 import Stroke from '../../../../../src/ol/style/Stroke.js';
@@ -15,15 +16,6 @@ describe('ol/style/RegularShape', function () {
     it('can use radius', function () {
       const style = new RegularShape({
         radius: 5,
-        radius2: 10,
-      });
-      expect(style.getRadius()).to.eql(5);
-      expect(style.getRadius2()).to.eql(10);
-    });
-
-    it('can use radius1 as an alias for radius', function () {
-      const style = new RegularShape({
-        radius1: 5,
         radius2: 10,
       });
       expect(style.getRadius()).to.eql(5);
@@ -191,7 +183,7 @@ describe('ol/style/RegularShape', function () {
       expect(original.getRotateWithView()).to.eql(clone.getRotateWithView());
       expect(original.getScale()).to.eql(clone.getScale());
       expect(original.getStroke().getColor()).to.eql(
-        clone.getStroke().getColor()
+        clone.getStroke().getColor(),
       );
       expect(original.getDisplacement()[0]).to.eql(clone.getDisplacement()[0]);
       expect(original.getDisplacement()[1]).to.eql(clone.getDisplacement()[1]);
@@ -215,10 +207,10 @@ describe('ol/style/RegularShape', function () {
       clone.getFill().setColor('#012345');
       clone.getStroke().setColor('#012345');
       expect(original.getFill().getColor()).to.not.eql(
-        clone.getFill().getColor()
+        clone.getFill().getColor(),
       );
       expect(original.getStroke().getColor()).to.not.eql(
-        clone.getStroke().getColor()
+        clone.getStroke().getColor(),
       );
     });
   });
@@ -227,9 +219,9 @@ describe('ol/style/RegularShape', function () {
     let canvas;
     beforeEach(function () {
       canvas = {
-        arc: sinon.spy(),
-        lineTo: sinon.spy(),
-        closePath: sinon.spy(),
+        arc: sinonSpy(),
+        lineTo: sinonSpy(),
+        closePath: sinonSpy(),
       };
     });
     it('does not double the points without radius2', function () {

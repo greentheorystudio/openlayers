@@ -1,7 +1,8 @@
 import Map from '../src/ol/Map.js';
 import View from '../src/ol/View.js';
-import {OSM, XYZ} from '../src/ol/source.js';
-import {WebGLTile as TileLayer} from '../src/ol/layer.js';
+import TileLayer from '../src/ol/layer/WebGLTile.js';
+import ImageTile from '../src/ol/source/ImageTile.js';
+import OSM from '../src/ol/source/OSM.js';
 
 const variables = {};
 
@@ -51,7 +52,7 @@ const scaled = ['*', 255, cosIncidence];
 
 const shadedRelief = new TileLayer({
   opacity: 0.3,
-  source: new XYZ({
+  source: new ImageTile({
     url: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
     maxZoom: 15,
     attributions:
@@ -59,7 +60,7 @@ const shadedRelief = new TileLayer({
   }),
   style: {
     variables: variables,
-    color: ['color', scaled, scaled, scaled],
+    color: ['color', scaled],
   },
 });
 

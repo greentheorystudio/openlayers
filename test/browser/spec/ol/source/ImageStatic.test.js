@@ -1,10 +1,11 @@
-import Static from '../../../../../src/ol/source/ImageStatic.js';
+import {spy as sinonSpy} from 'sinon';
 import {
   getBottomLeft,
   getHeight,
   getWidth,
 } from '../../../../../src/ol/extent.js';
 import {get as getProjection} from '../../../../../src/ol/proj.js';
+import Static from '../../../../../src/ol/source/ImageStatic.js';
 
 describe('ol/source/ImageStatic', function () {
   let extent, pixelRatio, projection, resolution;
@@ -20,12 +21,12 @@ describe('ol/source/ImageStatic', function () {
 
   describe('#getInterpolate()', function () {
     it('is true by default', function () {
-      const source = new Static({});
+      const source = new Static({imageExtent: extent});
       expect(source.getInterpolate()).to.be(true);
     });
 
     it('is false if constructed with interpolate: false', function () {
-      const source = new Static({interpolate: false});
+      const source = new Static({imageExtent: extent, interpolate: false});
       expect(source.getInterpolate()).to.be(false);
     });
   });
@@ -127,8 +128,8 @@ describe('ol/source/ImageStatic', function () {
         projection: projection,
       });
 
-      const imageloadstart = sinon.spy();
-      const imageloaderror = sinon.spy();
+      const imageloadstart = sinonSpy();
+      const imageloaderror = sinonSpy();
 
       source.on('imageloadstart', imageloadstart);
       source.on('imageloaderror', imageloaderror);

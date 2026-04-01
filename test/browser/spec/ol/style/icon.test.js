@@ -1,10 +1,10 @@
+import ImageState from '../../../../../src/ol/ImageState.js';
 import Icon from '../../../../../src/ol/style/Icon.js';
 import IconImage, {
   get as getIconImage,
 } from '../../../../../src/ol/style/IconImage.js';
-import ImageState from '../../../../../src/ol/ImageState.js';
-import {getUid} from '../../../../../src/ol/util.js';
 import {shared as iconImageCache} from '../../../../../src/ol/style/IconImageCache.js';
+import {getUid} from '../../../../../src/ol/util.js';
 
 describe('ol.style.Icon', function () {
   const size = [36, 48];
@@ -21,6 +21,17 @@ describe('ol.style.Icon', function () {
         img: canvas,
       });
       expect(getIconImage(canvas, getUid(canvas)).getImage()).to.eql(canvas);
+    });
+
+    it('set referrerPolicy on image elements', function () {
+      const referrerPolicy = 'no-referrer';
+      const iconStyle = new Icon({
+        src,
+        referrerPolicy,
+      });
+      expect(iconStyle.iconImage_.getImage().referrerPolicy).to.be(
+        referrerPolicy,
+      );
     });
   });
 
@@ -43,6 +54,7 @@ describe('ol.style.Icon', function () {
         anchorYUnits: 'pixels',
         color: '#319FD3',
         crossOrigin: 'Anonymous',
+        referrerPolicy: 'no-referrer',
         img: canvas,
         offset: [1, 2],
         offsetOrigin: 'bottom-left',
@@ -62,6 +74,7 @@ describe('ol.style.Icon', function () {
       expect(original.anchorXUnits_).to.eql(clone.anchorXUnits_);
       expect(original.anchorYUnits_).to.eql(clone.anchorYUnits_);
       expect(original.crossOrigin_).to.eql(clone.crossOrigin_);
+      expect(original.referrerPolicy_).to.eql(clone.referrerPolicy_);
       expect(original.getColor()).to.eql(clone.getColor());
       expect(original.offset_).to.eql(clone.offset_);
       expect(original.offsetOrigin_).to.eql(clone.offsetOrigin_);
@@ -179,6 +192,33 @@ describe('ol.style.Icon', function () {
       expect(original.getWidth()).to.eql(clone.getWidth());
       expect(original.getHeight()).to.eql(clone.getHeight());
       expect(original.getScale()).to.eql(clone.getScale());
+    });
+  });
+
+  describe('#setSrc', function () {
+    const newSrc = 'spec/ol/data/dot.png';
+
+    it('changes the source of the icon (by changing the whole image)', function () {
+      const icon = new Icon({
+        src,
+      });
+      const oldIconImage = icon.iconImage_;
+      icon.setSrc(newSrc);
+      expect(icon.getSrc()).to.be(newSrc);
+      expect(icon.iconImage_).to.not.be(oldIconImage);
+    });
+
+    it('loads the new image', function (done) {
+      const icon = new Icon({
+        src,
+      });
+      icon.setSrc(newSrc);
+      expect(icon.getImageState()).to.be(ImageState.IDLE);
+      icon.load();
+      icon.listenImageChange(() => {
+        expect(icon.getImageState()).to.be(ImageState.LOADED);
+        done();
+      });
     });
   });
 
@@ -358,7 +398,7 @@ describe('ol.style.Icon', function () {
     it('uses the cache', function (done) {
       const src = './spec/ol/data/dot.png';
       const iconImage = new IconImage(new Image(), src);
-      iconImageCache.set(src, null, null, iconImage);
+      iconImageCache.set(src, null, iconImage);
       iconImage.load();
 
       const iconStyle = new Icon({

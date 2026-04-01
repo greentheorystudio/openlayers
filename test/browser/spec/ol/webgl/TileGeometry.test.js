@@ -1,19 +1,20 @@
+import {spy as sinonSpy, stub as sinonStub} from 'sinon';
 import Feature from '../../../../../src/ol/Feature.js';
-import MixedGeometryBatch from '../../../../../src/ol/render/webgl/MixedGeometryBatch.js';
-import Point from '../../../../../src/ol/geom/Point.js';
-import Polygon from '../../../../../src/ol/geom/Polygon.js';
-import TileGeometry from '../../../../../src/ol/webgl/TileGeometry.js';
 import TileState from '../../../../../src/ol/TileState.js';
 import VectorRenderTile from '../../../../../src/ol/VectorRenderTile.js';
 import VectorTile from '../../../../../src/ol/VectorTile.js';
-import WebGLHelper from '../../../../../src/ol/webgl/Helper.js';
 import {VOID} from '../../../../../src/ol/functions.js';
+import Point from '../../../../../src/ol/geom/Point.js';
+import Polygon from '../../../../../src/ol/geom/Polygon.js';
+import MixedGeometryBatch from '../../../../../src/ol/render/webgl/MixedGeometryBatch.js';
 import {createXYZ} from '../../../../../src/ol/tilegrid.js';
+import WebGLHelper from '../../../../../src/ol/webgl/Helper.js';
+import TileGeometry from '../../../../../src/ol/webgl/TileGeometry.js';
 
 class MockRenderer {
-  generateBuffers = sinon
-    .stub()
-    .callsFake(() => new Promise((resolve) => (this.endGenerate_ = resolve)));
+  generateBuffers = sinonStub().callsFake(
+    () => new Promise((resolve) => (this.endGenerate_ = resolve)),
+  );
   endGenerate_ = null;
 }
 
@@ -24,12 +25,18 @@ describe('ol/webgl/TileGeometry', function () {
   /** @type {VectorRenderTile} */
   let tile;
 
-  let styleRenderers;
+  let styleRenderer;
   let helper;
 
   beforeEach(function () {
-    tile = new VectorRenderTile([3, 2, 1], TileState.IDLE, [3, 2, 1], () => []);
-    styleRenderers = [new MockRenderer(), new MockRenderer()];
+    tile = new VectorRenderTile(
+      [3, 2, 1],
+      TileState.IDLE,
+      [3, 2, 1],
+      () => [],
+      () => {},
+    );
+    styleRenderer = new MockRenderer();
     helper = new WebGLHelper();
 
     tileGeometry = new TileGeometry(
@@ -42,7 +49,7 @@ describe('ol/webgl/TileGeometry', function () {
         }),
         helper,
       },
-      styleRenderers
+      styleRenderer,
     );
   });
   this.afterEach(() => {
@@ -81,7 +88,7 @@ describe('ol/webgl/TileGeometry', function () {
         TileState.LOADED,
         'http://source',
         null,
-        VOID
+        VOID,
       );
       sourceTile.extent = [-100, -200, 300, 400];
       sourceTile.setFeatures(features);
@@ -89,11 +96,12 @@ describe('ol/webgl/TileGeometry', function () {
         [3, 2, 1],
         TileState.LOADED,
         [3, 2, 1],
-        () => [sourceTile]
+        () => [sourceTile],
+        () => {},
       );
 
-      sinon.spy(tileGeometry.batch_, 'clear');
-      sinon.spy(tileGeometry.batch_, 'addFeatures');
+      sinonSpy(tileGeometry.batch_, 'clear');
+      sinonSpy(tileGeometry.batch_, 'addFeatures');
       tileGeometry.setTile(newTile);
       setTimeout(done, 10);
     });
@@ -106,27 +114,39 @@ describe('ol/webgl/TileGeometry', function () {
     });
     it('calls generateBuffers for each renderer with the tile origin as transform', () => {
       const originTransform = [1, 0, 0, 1, 100, 200];
-      expect(styleRenderers[0].generateBuffers.callCount).to.be(1);
-      expect(styleRenderers[0].generateBuffers.getCall(0).args[1]).to.eql(
-        originTransform
-      );
-      expect(styleRenderers[1].generateBuffers.callCount).to.be(1);
-      expect(styleRenderers[1].generateBuffers.getCall(0).args[1]).to.eql(
-        originTransform
+      expect(styleRenderer.generateBuffers.callCount).to.be(1);
+      expect(styleRenderer.generateBuffers.getCall(0).args[1]).to.eql(
+        originTransform,
       );
     });
     it('becomes ready when each of the renderers have finished generating buffers', async () => {
       expect(tileGeometry.ready).to.be(false);
-      styleRenderers[0].endGenerate_();
+      styleRenderer.endGenerate_();
       expect(tileGeometry.ready).to.be(false);
-      styleRenderers[1].endGenerate_();
       await new Promise((resolve) => setTimeout(resolve));
       expect(tileGeometry.ready).to.be(true);
     });
-    it('fills the mask buffer with the tile extent', () => {
+    it('fills the mask buffer with the tile extent (expressed relative to the tile origin)', () => {
       expect(tileGeometry.maskVertices.getArray()).to.eql([
-        -100, -200, 300, -200, 300, 400, -100, 400,
+        0, 0, 400, 0, 400, 600, 0, 600,
       ]);
+    });
+
+    describe('#dispose', () => {
+      let deleteBufferSpy;
+      beforeEach(async () => {
+        deleteBufferSpy = sinonSpy(helper, 'deleteBuffer');
+        // generate buffers and dispose the tile
+        styleRenderer.endGenerate_({
+          pointBuffers: [{}, {}],
+          polygonBuffers: [{}, {}],
+        });
+        await new Promise((resolve) => setTimeout(resolve));
+        tileGeometry.dispose();
+      });
+      it('deletes webgl buffers', () => {
+        expect(deleteBufferSpy.callCount).to.be(4); // 2 for points, 2 for polygons
+      });
     });
   });
 });

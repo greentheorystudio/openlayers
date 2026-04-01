@@ -1,9 +1,9 @@
+import {spy as sinonSpy} from 'sinon';
 import Feature, {createStyleFunction} from '../../../src/ol/Feature.js';
 import Point from '../../../src/ol/geom/Point.js';
+import {isEmpty} from '../../../src/ol/obj.js';
 import Style from '../../../src/ol/style/Style.js';
 import expect from '../expect.js';
-import sinon from 'sinon';
-import {isEmpty} from '../../../src/ol/obj.js';
 
 describe('ol/Feature.js', function () {
   describe('constructor', function () {
@@ -229,7 +229,7 @@ describe('ol/Feature.js', function () {
       feature.set('altGeometry', point2);
       feature.setGeometryName('altGeometry');
 
-      const spy = sinon.spy();
+      const spy = sinonSpy();
       feature.on('change', spy);
       point2.setCoordinates([0, 2]);
       expect(spy.callCount).to.be(1);
@@ -338,7 +338,7 @@ describe('ol/Feature.js', function () {
 
     it('dispatches a change event', function () {
       const feature = new Feature();
-      const spy = sinon.spy();
+      const spy = sinonSpy();
       feature.on('change', spy);
       feature.setStyle(style);
       expect(spy.callCount).to.be(1);
@@ -408,6 +408,19 @@ describe('ol/Feature.js', function () {
       expect(clone.get('barkey')).to.be('barval');
     });
 
+    it('clones features where the default geometry propetry is not a geometry', function () {
+      const f = new Feature();
+      f.setGeometryName('__geometry');
+      f.setGeometry(new Point([1, 1]));
+      f.setProperties({
+        geometry: {lat: 1, lon: 1},
+      });
+      const clone = f.clone();
+      expect(f.getGeometryName()).to.be(clone.getGeometryName());
+      expect(clone.getGeometry()).to.be.a(Point);
+      expect(clone.get('geometry')).to.eql({lat: 1, lon: 1});
+    });
+
     it('correctly clones features with no geometry and no style', function () {
       const feature = new Feature();
       feature.set('fookey', 'fooval');
@@ -424,7 +437,7 @@ describe('ol/Feature.js', function () {
       const feature = new Feature({
         geometry: new Point([0, 0]),
       });
-      const spy = sinon.spy();
+      const spy = sinonSpy();
       feature.on('change', spy);
       feature.setGeometry(null);
       expect(spy.callCount).to.be(1);

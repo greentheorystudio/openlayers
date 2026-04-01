@@ -1,9 +1,9 @@
 /**
  * @module ol/render/webgl/MixedGeometryBatch
  */
+import {inflateEnds} from '../../geom/flat/orient.js';
 import RenderFeature from '../../render/Feature.js';
 import {getUid} from '../../util.js';
-import {inflateEnds} from '../../geom/flat/orient.js';
 
 /**
  * @typedef {import("../../Feature.js").default} Feature
@@ -71,7 +71,11 @@ import {inflateEnds} from '../../geom/flat/orient.js';
  */
 class MixedGeometryBatch {
   constructor() {
+    /**
+     * @private
+     */
     this.globalCounter_ = 0;
+
     /**
      * Refs are used as keys for hit detection.
      * @type {Map<number, Feature|RenderFeature>}
@@ -88,7 +92,7 @@ class MixedGeometryBatch {
 
     /**
      * The precision in WebGL shaders is limited.
-     * To keep the refs as small as possible we maintain an array of returned references.
+     * To keep the refs as small as possible we maintain an array of freed up references.
      * @type {Array<number>}
      * @private
      */
@@ -154,12 +158,13 @@ class MixedGeometryBatch {
    * @private
    */
   clearFeatureEntryInPointBatch_(feature) {
-    const entry = this.pointBatch.entries[getUid(feature)];
+    const featureUid = getUid(feature);
+    const entry = this.pointBatch.entries[featureUid];
     if (!entry) {
       return;
     }
     this.pointBatch.geometriesCount -= entry.flatCoordss.length;
-    delete this.pointBatch.entries[getUid(feature)];
+    delete this.pointBatch.entries[featureUid];
     return entry;
   }
 
@@ -169,13 +174,14 @@ class MixedGeometryBatch {
    * @private
    */
   clearFeatureEntryInLineStringBatch_(feature) {
-    const entry = this.lineStringBatch.entries[getUid(feature)];
+    const featureUid = getUid(feature);
+    const entry = this.lineStringBatch.entries[featureUid];
     if (!entry) {
       return;
     }
     this.lineStringBatch.verticesCount -= entry.verticesCount;
     this.lineStringBatch.geometriesCount -= entry.flatCoordss.length;
-    delete this.lineStringBatch.entries[getUid(feature)];
+    delete this.lineStringBatch.entries[featureUid];
     return entry;
   }
 
@@ -185,14 +191,15 @@ class MixedGeometryBatch {
    * @private
    */
   clearFeatureEntryInPolygonBatch_(feature) {
-    const entry = this.polygonBatch.entries[getUid(feature)];
+    const featureUid = getUid(feature);
+    const entry = this.polygonBatch.entries[featureUid];
     if (!entry) {
       return;
     }
     this.polygonBatch.verticesCount -= entry.verticesCount;
     this.polygonBatch.ringsCount -= entry.ringsCount;
     this.polygonBatch.geometriesCount -= entry.flatCoordss.length;
-    delete this.polygonBatch.entries[getUid(feature)];
+    delete this.polygonBatch.entries[featureUid];
     return entry;
   }
 
@@ -223,7 +230,7 @@ class MixedGeometryBatch {
           multiPolygonGeom.getEndss(),
           feature,
           getUid(feature),
-          multiPolygonGeom.getStride()
+          multiPolygonGeom.getStride(),
         );
         break;
       }
@@ -238,7 +245,7 @@ class MixedGeometryBatch {
           multiLineGeom.getEnds(),
           feature,
           getUid(feature),
-          multiLineGeom.getStride()
+          multiLineGeom.getStride(),
         );
         break;
       }
@@ -253,7 +260,7 @@ class MixedGeometryBatch {
           null,
           feature,
           getUid(feature),
-          multiPointGeom.getStride()
+          multiPointGeom.getStride(),
         );
         break;
       }
@@ -268,7 +275,7 @@ class MixedGeometryBatch {
           polygonGeom.getEnds(),
           feature,
           getUid(feature),
-          polygonGeom.getStride()
+          polygonGeom.getStride(),
         );
         break;
       }
@@ -282,7 +289,7 @@ class MixedGeometryBatch {
           null,
           feature,
           getUid(feature),
-          pointGeom.getStride()
+          pointGeom.getStride(),
         );
         break;
       }
@@ -291,13 +298,17 @@ class MixedGeometryBatch {
         const lineGeom = /** @type {import("../../geom.js").LineString} */ (
           geometry
         );
+
+        const stride = lineGeom.getStride();
+
         this.addCoordinates_(
           type,
           lineGeom.getFlatCoordinates(),
           null,
           feature,
           getUid(feature),
-          lineGeom.getStride()
+          stride,
+          lineGeom.getLayout?.(),
         );
         break;
       }
@@ -313,9 +324,10 @@ class MixedGeometryBatch {
    * @param {Feature|RenderFeature} feature Feature
    * @param {string} featureUid Feature uid
    * @param {number} stride Stride
+   * @param {import('../../geom/Geometry.js').GeometryLayout} [layout] Layout
    * @private
    */
-  addCoordinates_(type, flatCoords, ends, feature, featureUid, stride) {
+  addCoordinates_(type, flatCoords, ends, feature, featureUid, stride, layout) {
     /** @type {number} */
     let verticesCount;
     switch (type) {
@@ -338,7 +350,8 @@ class MixedGeometryBatch {
             polygonEnds,
             feature,
             featureUid,
-            stride
+            stride,
+            layout,
           );
         }
         break;
@@ -353,7 +366,8 @@ class MixedGeometryBatch {
             null,
             feature,
             featureUid,
-            stride
+            stride,
+            layout,
           );
         }
         break;
@@ -366,7 +380,8 @@ class MixedGeometryBatch {
             null,
             feature,
             featureUid,
-            null
+            null,
+            null,
           );
         }
         break;
@@ -381,7 +396,8 @@ class MixedGeometryBatch {
               multiPolygonEnds,
               feature,
               featureUid,
-              stride
+              stride,
+              layout,
             );
             return;
           }
@@ -395,22 +411,22 @@ class MixedGeometryBatch {
               verticesCount: 0,
               ringsCount: 0,
               ringsVerticesCounts: [],
-            }
+            },
           );
         }
         verticesCount = flatCoords.length / stride;
         const ringsCount = ends.length;
         const ringsVerticesCount = ends.map((end, ind, arr) =>
-          ind > 0 ? (end - arr[ind - 1]) / stride : end / stride
+          ind > 0 ? (end - arr[ind - 1]) / stride : end / stride,
         );
         this.polygonBatch.verticesCount += verticesCount;
         this.polygonBatch.ringsCount += ringsCount;
         this.polygonBatch.geometriesCount++;
         this.polygonBatch.entries[featureUid].flatCoordss.push(
-          getFlatCoordinatesXY(flatCoords, stride)
+          getFlatCoordinatesXY(flatCoords, stride),
         );
         this.polygonBatch.entries[featureUid].ringsVerticesCounts.push(
-          ringsVerticesCount
+          ringsVerticesCount,
         );
         this.polygonBatch.entries[featureUid].verticesCount += verticesCount;
         this.polygonBatch.entries[featureUid].ringsCount += ringsCount;
@@ -422,7 +438,8 @@ class MixedGeometryBatch {
             null,
             feature,
             featureUid,
-            stride
+            stride,
+            layout,
           );
         }
         break;
@@ -434,7 +451,7 @@ class MixedGeometryBatch {
             {
               feature: feature,
               flatCoordss: [],
-            }
+            },
           );
         }
         this.pointBatch.geometriesCount++;
@@ -449,14 +466,14 @@ class MixedGeometryBatch {
               feature: feature,
               flatCoordss: [],
               verticesCount: 0,
-            }
+            },
           );
         }
         verticesCount = flatCoords.length / stride;
         this.lineStringBatch.verticesCount += verticesCount;
         this.lineStringBatch.geometriesCount++;
         this.lineStringBatch.entries[featureUid].flatCoordss.push(
-          getFlatCoordinatesXY(flatCoords, stride)
+          getFlatCoordinatesXYM(flatCoords, stride, layout),
         );
         this.lineStringBatch.entries[featureUid].verticesCount += verticesCount;
         break;
@@ -491,7 +508,7 @@ class MixedGeometryBatch {
    * @param {string} featureUid the feature uid
    * @private
    */
-  returnRef_(ref, featureUid) {
+  removeRef_(ref, featureUid) {
     if (!ref) {
       throw new Error('This feature has no ref: ' + featureUid);
     }
@@ -502,12 +519,21 @@ class MixedGeometryBatch {
 
   /**
    * @param {Feature|RenderFeature} feature Feature
+   * @param {import("../../proj.js").TransformFunction} [projectionTransform] Projection transform.
    */
-  changeFeature(feature) {
+  changeFeature(feature, projectionTransform) {
+    // the feature is not present in the batch; do not add it to avoid unexpected behaviors
+    if (!this.uidToRef_.get(getUid(feature))) {
+      return;
+    }
     this.removeFeature(feature);
-    const geometry = feature.getGeometry();
+    let geometry = feature.getGeometry();
     if (!geometry) {
       return;
+    }
+    if (projectionTransform) {
+      geometry = geometry.clone();
+      geometry.applyTransform(projectionTransform);
     }
     this.addGeometry_(geometry, feature);
   }
@@ -516,12 +542,11 @@ class MixedGeometryBatch {
    * @param {Feature|RenderFeature} feature Feature
    */
   removeFeature(feature) {
-    let entry;
-    entry = this.clearFeatureEntryInPointBatch_(feature) || entry;
+    let entry = this.clearFeatureEntryInPointBatch_(feature);
     entry = this.clearFeatureEntryInPolygonBatch_(feature) || entry;
     entry = this.clearFeatureEntryInLineStringBatch_(feature) || entry;
     if (entry) {
-      this.returnRef_(entry.ref, getUid(entry.feature));
+      this.removeRef_(entry.ref, getUid(entry.feature));
     }
   }
 
@@ -549,6 +574,35 @@ class MixedGeometryBatch {
   getFeatureFromRef(ref) {
     return this.refToFeature_.get(ref);
   }
+
+  isEmpty() {
+    return this.globalCounter_ === 0;
+  }
+
+  /**
+   * Will return a new instance of this class that only contains the features
+   * for which the provided callback returned true
+   * @param {function((Feature|RenderFeature)): boolean} featureFilter Feature filter callback
+   * @return {MixedGeometryBatch} Filtered geometry batch
+   */
+  filter(featureFilter) {
+    const filtered = new MixedGeometryBatch();
+    filtered.globalCounter_ = this.globalCounter_;
+    filtered.uidToRef_ = this.uidToRef_;
+    filtered.refToFeature_ = this.refToFeature_;
+    let empty = true;
+    for (const feature of this.refToFeature_.values()) {
+      if (featureFilter(feature)) {
+        filtered.addFeature(feature);
+        empty = false;
+      }
+    }
+    // no feature was added at all; simply return an empty batch for consistency downstream
+    if (empty) {
+      return new MixedGeometryBatch();
+    }
+    return filtered;
+  }
 }
 
 /**
@@ -561,6 +615,30 @@ function getFlatCoordinatesXY(flatCoords, stride) {
     return flatCoords;
   }
   return flatCoords.filter((v, i) => i % stride < 2);
+}
+
+/**
+ * @param {Array<number>} flatCoords Flat coords
+ * @param {number} stride Stride
+ * @param {string} layout Layout
+ * @return {Array<number>} Flat coords with only XY components
+ */
+function getFlatCoordinatesXYM(flatCoords, stride, layout) {
+  if (stride === 3 && layout === 'XYM') {
+    return flatCoords;
+  }
+  // this is XYZM layout
+  if (stride === 4) {
+    return flatCoords.filter((v, i) => i % stride !== 2);
+  }
+  // this is XYZ layout
+  if (stride === 3) {
+    return flatCoords.map((v, i) => (i % stride !== 2 ? v : 0));
+  }
+  // this is XY layout
+  return new Array(flatCoords.length * 1.5)
+    .fill(0)
+    .map((v, i) => (i % 3 === 2 ? 0 : flatCoords[Math.round(i / 1.5)]));
 }
 
 export default MixedGeometryBatch;

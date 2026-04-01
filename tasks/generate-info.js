@@ -1,12 +1,11 @@
-import esMain from 'es-main';
-import fse from 'fs-extra';
+import {spawn} from 'child_process';
 import path, {dirname} from 'path';
 import {fileURLToPath} from 'url';
-import {spawn} from 'child_process';
-import pkg from 'walk/lib/walk.js';
-const { walk } = pkg;
+import esMain from 'es-main';
+import fse from 'fs-extra';
+import {walk} from 'walk';
 
-const isWindows = process.platform.indexOf('win') === 0;
+const isWindows = process.platform.startsWith('win');
 const baseDir = dirname(fileURLToPath(import.meta.url));
 
 const sourceDir = path.join(baseDir, '..', 'src');
@@ -27,12 +26,12 @@ function getBinaryPath(binaryName) {
     '..',
     'node_modules',
     'jsdoc',
-    'jsdoc.js'
+    'jsdoc.js',
   );
   const expectedPaths = [
     path.join(baseDir, '..', 'node_modules', '.bin', binaryName),
     path.resolve(
-      path.join(path.dirname(jsdocResolved), '..', '.bin', binaryName)
+      path.join(path.dirname(jsdocResolved), '..', '.bin', binaryName),
     ),
   ];
 
@@ -44,7 +43,7 @@ function getBinaryPath(binaryName) {
   }
 
   throw Error(
-    'JsDoc binary was not found in any of the expected paths: ' + expectedPaths
+    'JsDoc binary was not found in any of the expected paths: ' + expectedPaths,
   );
 }
 
@@ -56,12 +55,12 @@ const jsdocConfig = path.join(
   'config',
   'jsdoc',
   'info',
-  'conf.json'
+  'conf.json',
 );
 
 /**
  * Generate a list of all .js paths in the source directory.
- * @return {Promise<Array>} Resolves to an array of source paths.
+ * @return {Promise<Array<string>>} Resolves to an array of source paths.
  */
 function getPaths() {
   return new Promise((resolve, reject) => {
@@ -69,9 +68,8 @@ function getPaths() {
 
     const walker = walk(sourceDir);
     walker.on('file', (root, stats, next) => {
-      const sourcePath = path.join(root, stats.name);
-      if (/\.js$/.test(sourcePath)) {
-        paths.push(sourcePath);
+      if (stats.name.endsWith('.js')) {
+        paths.push(path.join(root, stats.name));
       }
       next();
     });
@@ -108,7 +106,7 @@ function parseOutput(output) {
   let info;
   try {
     info = JSON.parse(String(output));
-  } catch (err) {
+  } catch {
     throw new Error('Failed to parse output as JSON: ' + output);
   }
   if (!Array.isArray(info.symbols)) {
@@ -132,7 +130,20 @@ function spawnJSDoc(paths) {
     let output = '';
     let errors = '';
     const cwd = path.join(baseDir, '..');
-    const child = spawn(jsdoc, ['-c', jsdocConfig].concat(paths), {cwd: cwd});
+    const args = ['-c', jsdocConfig].concat(paths);
+
+    let child;
+    if (isWindows) {
+      args.unshift(jsdoc);
+      // No escaping done here as arguments are all windows path names
+      const command = args.map((arg) => `"${arg}"`).join(' ');
+      child = spawn(command, {
+        cwd,
+        shell: true,
+      });
+    } else {
+      child = spawn(jsdoc, args, {cwd});
+    }
 
     child.stdout.on('data', (data) => {
       output += String(data);

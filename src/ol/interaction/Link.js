@@ -1,11 +1,11 @@
 /**
  * @module ol/interaction/Link
  */
-import EventType from '../events/EventType.js';
-import Interaction from './Interaction.js';
 import MapEventType from '../MapEventType.js';
+import EventType from '../events/EventType.js';
 import {listen, unlistenByKey} from '../events.js';
 import {toFixed} from '../math.js';
+import Interaction from './Interaction.js';
 
 /**
  * @param {number} number A number.
@@ -90,7 +90,7 @@ class Link extends Interaction {
         replace: false,
         prefix: '',
       },
-      options || {}
+      options || {},
     );
 
     let animationOptions;
@@ -141,6 +141,9 @@ class Link extends Interaction {
      */
     this.initial_ = true;
 
+    /**
+     * @private
+     */
     this.updateState_ = this.updateState_.bind(this);
 
     /**
@@ -207,6 +210,7 @@ class Link extends Interaction {
 
   /**
    * @param {import("../Map.js").default|null} map Map.
+   * @override
    */
   setMap(map) {
     const oldMap = this.getMap();
@@ -232,7 +236,7 @@ class Link extends Interaction {
     this.listenerKeys_.push(
       listen(map, MapEventType.MOVEEND, this.updateUrl_, this),
       listen(map.getLayerGroup(), EventType.CHANGE, this.updateUrl_, this),
-      listen(map, 'change:layergroup', this.handleChangeLayerGroup_, this)
+      listen(map, 'change:layergroup', this.handleChangeLayerGroup_, this),
     );
 
     if (!this.replace_) {
@@ -297,7 +301,7 @@ class Link extends Interaction {
       return;
     }
     const view = map.getView();
-    if (!view) {
+    if (!view || !view.isDef()) {
       return;
     }
 
@@ -417,7 +421,7 @@ class Link extends Interaction {
       return;
     }
     const view = map.getView();
-    if (!view) {
+    if (!view || !view.isDef()) {
       return;
     }
 

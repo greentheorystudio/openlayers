@@ -1,9 +1,10 @@
-import GeoJSON from '../src/ol/format/GeoJSON.js';
+import geojsonvt from 'geojson-vt';
 import Map from '../src/ol/Map.js';
-import Projection from '../src/ol/proj/Projection.js';
-import VectorTileLayer from '../src/ol/layer/VectorTile.js';
-import VectorTileSource from '../src/ol/source/VectorTile.js';
 import View from '../src/ol/View.js';
+import GeoJSON from '../src/ol/format/GeoJSON.js';
+import VectorTileLayer from '../src/ol/layer/VectorTile.js';
+import Projection from '../src/ol/proj/Projection.js';
+import VectorTileSource from '../src/ol/source/VectorTile.js';
 
 // Converts geojson-vt data to GeoJSON
 const replacer = function (key, value) {
@@ -88,14 +89,14 @@ fetch(url)
         const data = tileIndex.getTile(
           tileCoord[0],
           tileCoord[1],
-          tileCoord[2]
+          tileCoord[2],
         );
         const geojson = JSON.stringify(
           {
             type: 'FeatureCollection',
             features: data ? data.features : [],
           },
-          replacer
+          replacer,
         );
         const features = format.readFeatures(geojson, {
           extent: vectorSource.getTileGrid().getTileCoordExtent(tileCoord),

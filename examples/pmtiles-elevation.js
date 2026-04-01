@@ -1,14 +1,14 @@
-/* global pmtiles */
-import DataTile from '../src/ol/source/DataTile.js';
+import {PMTiles} from 'pmtiles';
 import Map from '../src/ol/Map.js';
-import TileLayer from '../src/ol/layer/WebGLTile.js';
 import View from '../src/ol/View.js';
+import TileLayer from '../src/ol/layer/WebGLTile.js';
 import {useGeographic} from '../src/ol/proj.js';
+import DataTile from '../src/ol/source/DataTile.js';
 
 useGeographic();
 
-const tiles = new pmtiles.PMTiles(
-  'https://pub-9288c68512ed46eca46ddcade307709b.r2.dev/protomaps-sample-datasets/terrarium_z9.pmtiles'
+const tiles = new PMTiles(
+  'https://pub-9288c68512ed46eca46ddcade307709b.r2.dev/protomaps-sample-datasets/terrarium_z9.pmtiles',
 );
 
 function loadImage(src) {
@@ -20,8 +20,8 @@ function loadImage(src) {
   });
 }
 
-async function loader(z, x, y) {
-  const response = await tiles.getZxy(z, x, y);
+async function loader(z, x, y, {signal}) {
+  const response = await tiles.getZxy(z, x, y, signal);
   const blob = new Blob([response.data]);
   const src = URL.createObjectURL(blob);
   const image = await loadImage(src);
@@ -66,6 +66,7 @@ const incidence = [
   ['*', ['sin', sunEl], ['cos', slope]],
   ['*', ['cos', sunEl], ['sin', slope], ['cos', ['-', sunAz, aspect]]],
 ];
+const scaled = ['*', 255, incidence];
 
 const variables = {};
 
@@ -79,7 +80,7 @@ const layer = new TileLayer({
   }),
   style: {
     variables: variables,
-    color: ['array', incidence, incidence, incidence, 1],
+    color: ['color', scaled],
   },
 });
 
@@ -118,7 +119,7 @@ function formatLocation([lon, lat]) {
   const NS = lat < 0 ? 'S' : 'N';
   const EW = lon < 0 ? 'W' : 'E';
   return `${Math.abs(lat).toFixed(1)}° ${NS}, ${Math.abs(lon).toFixed(
-    1
+    1,
   )}° ${EW}`;
 }
 

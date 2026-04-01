@@ -2,40 +2,38 @@
  * @module ol/render/Feature
  */
 import Feature from '../Feature.js';
-import {
-  LineString,
-  MultiLineString,
-  MultiPoint,
-  MultiPolygon,
-  Point,
-  Polygon,
-} from '../geom.js';
-import {
-  compose as composeTransform,
-  create as createTransform,
-} from '../transform.js';
+import {extend} from '../array.js';
 import {
   createOrUpdateFromCoordinate,
   createOrUpdateFromFlatCoordinates,
   getCenter,
   getHeight,
 } from '../extent.js';
+import {memoizeOne} from '../functions.js';
+import LineString from '../geom/LineString.js';
+import MultiLineString from '../geom/MultiLineString.js';
+import MultiPoint from '../geom/MultiPoint.js';
+import MultiPolygon from '../geom/MultiPolygon.js';
+import Point from '../geom/Point.js';
+import Polygon from '../geom/Polygon.js';
+import {linearRingss as linearRingssCenter} from '../geom/flat/center.js';
+import {
+  getInteriorPointOfArray,
+  getInteriorPointsOfMultiArray,
+} from '../geom/flat/interiorpoint.js';
+import {interpolatePoint} from '../geom/flat/interpolate.js';
+import {inflateEnds} from '../geom/flat/orient.js';
 import {
   douglasPeucker,
   douglasPeuckerArray,
   quantizeArray,
 } from '../geom/flat/simplify.js';
-import {extend} from '../array.js';
-import {
-  getInteriorPointOfArray,
-  getInteriorPointsOfMultiArray,
-} from '../geom/flat/interiorpoint.js';
-import {get as getProjection} from '../proj.js';
-import {inflateEnds} from '../geom/flat/orient.js';
-import {interpolatePoint} from '../geom/flat/interpolate.js';
-import {linearRingss as linearRingssCenter} from '../geom/flat/center.js';
-import {memoizeOne} from '../functions.js';
 import {transform2D} from '../geom/flat/transform.js';
+import {get as getProjection} from '../proj.js';
+import {
+  compose as composeTransform,
+  create as createTransform,
+} from '../transform.js';
 
 /**
  * @typedef {'Point' | 'LineString' | 'LinearRing' | 'Polygon' | 'MultiPoint' | 'MultiLineString'} Type
@@ -107,9 +105,9 @@ class RenderFeature {
 
     /**
      * @private
-     * @type {Array<number>}
+     * @type {Array<number>|null}
      */
-    this.ends_ = ends;
+    this.ends_ = ends || null;
 
     /**
      * @private
@@ -118,11 +116,13 @@ class RenderFeature {
     this.properties_ = properties;
 
     /**
+     * @private
      * @type {number}
      */
     this.squaredTolerance_;
 
     /**
+     * @private
      * @type {number}
      */
     this.stride_ = stride;
@@ -158,7 +158,7 @@ class RenderFeature {
               this.flatCoordinates_,
               0,
               this.flatCoordinates_.length,
-              2
+              this.stride_,
             );
     }
     return this.extent_;
@@ -173,10 +173,10 @@ class RenderFeature {
       this.flatInteriorPoints_ = getInteriorPointOfArray(
         this.flatCoordinates_,
         0,
-        /** @type {Array<number>} */ (this.ends_),
-        2,
+        this.ends_,
+        this.stride_,
         flatCenter,
-        0
+        0,
       );
     }
     return this.flatInteriorPoints_;
@@ -188,13 +188,18 @@ class RenderFeature {
   getFlatInteriorPoints() {
     if (!this.flatInteriorPoints_) {
       const ends = inflateEnds(this.flatCoordinates_, this.ends_);
-      const flatCenters = linearRingssCenter(this.flatCoordinates_, 0, ends, 2);
+      const flatCenters = linearRingssCenter(
+        this.flatCoordinates_,
+        0,
+        ends,
+        this.stride_,
+      );
       this.flatInteriorPoints_ = getInteriorPointsOfMultiArray(
         this.flatCoordinates_,
         0,
         ends,
-        2,
-        flatCenters
+        this.stride_,
+        flatCenters,
       );
     }
     return this.flatInteriorPoints_;
@@ -209,8 +214,8 @@ class RenderFeature {
         this.flatCoordinates_,
         0,
         this.flatCoordinates_.length,
-        2,
-        0.5
+        this.stride_,
+        0.5,
       );
     }
     return this.flatMidpoints_;
@@ -227,7 +232,13 @@ class RenderFeature {
       const ends = /** @type {Array<number>} */ (this.ends_);
       for (let i = 0, ii = ends.length; i < ii; ++i) {
         const end = ends[i];
-        const midpoint = interpolatePoint(flatCoordinates, offset, end, 2, 0.5);
+        const midpoint = interpolatePoint(
+          flatCoordinates,
+          offset,
+          end,
+          this.stride_,
+          0.5,
+        );
         extend(this.flatMidpoints_, midpoint);
         offset = end;
       }
@@ -340,15 +351,15 @@ class RenderFeature {
         -scale,
         0,
         0,
-        0
+        0,
       );
       transform2D(
         this.flatCoordinates_,
         0,
         this.flatCoordinates_.length,
-        2,
+        this.stride_,
         tmpTransform,
-        this.flatCoordinates_
+        this.flatCoordinates_,
       );
     }
   }
@@ -371,15 +382,15 @@ class RenderFeature {
     return new RenderFeature(
       this.type_,
       this.flatCoordinates_.slice(),
-      this.ends_.slice(),
+      this.ends_?.slice(),
       this.stride_,
       Object.assign({}, this.properties_),
-      this.id_
+      this.id_,
     );
   }
 
   /**
-   * @return {Array<number>} Ends.
+   * @return {Array<number>|null} Ends.
    */
   getEnds() {
     return this.ends_;
@@ -410,7 +421,7 @@ class RenderFeature {
             this.simplifiedGeometry_.stride_,
             squaredTolerance,
             simplifiedFlatCoordinates,
-            0
+            0,
           );
           simplifiedEnds = [simplifiedFlatCoordinates.length];
           break;
@@ -424,7 +435,7 @@ class RenderFeature {
             squaredTolerance,
             simplifiedFlatCoordinates,
             0,
-            simplifiedEnds
+            simplifiedEnds,
           );
           break;
         case 'Polygon':
@@ -437,7 +448,7 @@ class RenderFeature {
             Math.sqrt(squaredTolerance),
             simplifiedFlatCoordinates,
             0,
-            simplifiedEnds
+            simplifiedEnds,
           );
           break;
         default:
@@ -447,9 +458,9 @@ class RenderFeature {
           this.type_,
           simplifiedFlatCoordinates,
           simplifiedEnds,
-          2,
+          this.stride_,
           this.properties_,
-          this.id_
+          this.id_,
         );
       }
       this.squaredTolerance_ = squaredTolerance;
@@ -486,11 +497,11 @@ export function toGeometry(renderFeature) {
       return new MultiLineString(
         renderFeature.getFlatCoordinates(),
         'XY',
-        /** @type {Array<number>} */ (renderFeature.getEnds())
+        /** @type {Array<number>} */ (renderFeature.getEnds()),
       );
     case 'Polygon':
       const flatCoordinates = renderFeature.getFlatCoordinates();
-      const ends = /** @type {Array<number>} */ (renderFeature.getEnds());
+      const ends = renderFeature.getEnds();
       const endss = inflateEnds(flatCoordinates, ends);
       return endss.length > 1
         ? new MultiPolygon(flatCoordinates, 'XY', endss)
@@ -503,7 +514,7 @@ export function toGeometry(renderFeature) {
 /**
  * Create an `ol/Feature` from an `ol/render/Feature`
  * @param {RenderFeature} renderFeature RenderFeature
- * @param {string} [geometryName='geometry'] Geometry name to use
+ * @param {string} [geometryName] Geometry name to use
  * when creating the Feature.
  * @return {Feature} Newly constructed `ol/Feature` with properties,
  * geometry, and id copied over.

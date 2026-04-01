@@ -1,7 +1,10 @@
 import Map from '../src/ol/Map.js';
 import View from '../src/ol/View.js';
-import {Image as ImageLayer, Tile as TileLayer} from '../src/ol/layer.js';
-import {OSM, Raster, XYZ} from '../src/ol/source.js';
+import ImageLayer from '../src/ol/layer/Image.js';
+import TileLayer from '../src/ol/layer/Tile.js';
+import ImageTile from '../src/ol/source/ImageTile.js';
+import OSM from '../src/ol/source/OSM.js';
+import Raster from '../src/ol/source/Raster.js';
 
 /**
  * Generates a shaded relief image given elevation data.  Uses a 3x3
@@ -118,12 +121,16 @@ function shade(inputs, data) {
     }
   }
 
-  return {data: shadeData, width: width, height: height};
+  return {
+    data: shadeData,
+    width,
+    height,
+    colorSpace: 'srgb',
+  };
 }
 
-const elevation = new XYZ({
+const elevation = new ImageTile({
   url: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
-  crossOrigin: 'anonymous',
   maxZoom: 15,
   attributions:
     '<a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank">Data sources and attribution</a>',

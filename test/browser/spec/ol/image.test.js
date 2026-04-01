@@ -1,10 +1,11 @@
-import ImageState from '../../../../src/ol/ImageState.js';
+import {spy as sinonSpy} from 'sinon';
 import ImageWrapper, {
   decode,
   decodeFallback,
   listenImage,
   load,
 } from '../../../../src/ol/Image.js';
+import ImageState from '../../../../src/ol/ImageState.js';
 
 const dataUri =
   'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
@@ -19,7 +20,7 @@ describe('ol/Image', function () {
         extent,
         resolution,
         pixelRatio,
-        ImageState.IDLE
+        ImageState.IDLE,
       );
       expect(instance).to.be.an(ImageWrapper);
       expect(instance.getState()).to.be(ImageState.IDLE);
@@ -53,8 +54,8 @@ describe('ol/Image', function () {
     let handleLoad, handleError, img;
 
     beforeEach(function () {
-      handleLoad = sinon.spy();
-      handleError = sinon.spy();
+      handleLoad = sinonSpy();
+      handleError = sinonSpy();
       img = new Image();
     });
 

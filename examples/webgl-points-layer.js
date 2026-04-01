@@ -1,10 +1,10 @@
-import GeoJSON from '../src/ol/format/GeoJSON.js';
 import Map from '../src/ol/Map.js';
-import OSM from '../src/ol/source/OSM.js';
-import TileLayer from '../src/ol/layer/Tile.js';
-import Vector from '../src/ol/source/Vector.js';
 import View from '../src/ol/View.js';
-import WebGLPointsLayer from '../src/ol/layer/WebGLPoints.js';
+import GeoJSON from '../src/ol/format/GeoJSON.js';
+import TileLayer from '../src/ol/layer/Tile.js';
+import WebGLVectorLayer from '../src/ol/layer/WebGLVector.js';
+import OSM from '../src/ol/source/OSM.js';
+import Vector from '../src/ol/source/Vector.js';
 
 const vectorSource = new Vector({
   url: 'data/geojson/world-cities.geojson',
@@ -103,7 +103,7 @@ const predefinedStyles = {
   'rotating-bars': {
     'shape-rotation': ['*', ['time'], 0.13],
     'shape-points': 4,
-    'shape-radius1': 4,
+    'shape-radius': 4,
     'shape-radius2': 4 * Math.sqrt(2),
     'shape-scale': [
       'array',
@@ -160,7 +160,7 @@ map.on('pointermove', function (ev) {
 
 function refreshLayer(newStyle) {
   const previousLayer = pointsLayer;
-  pointsLayer = new WebGLPointsLayer({
+  pointsLayer = new WebGLVectorLayer({
     source: vectorSource,
     style: newStyle,
   });

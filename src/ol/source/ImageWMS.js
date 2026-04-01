@@ -2,11 +2,11 @@
  * @module ol/source/ImageWMS
  */
 
-import ImageSource, {defaultImageLoadFunction} from './Image.js';
-import {calculateSourceResolution} from '../reproj.js';
-import {createLoader, getFeatureInfoUrl, getLegendUrl} from './wms.js';
 import {decode} from '../Image.js';
 import {get as getProjection, transform} from '../proj.js';
+import {calculateSourceResolution} from '../reproj.js';
+import ImageSource, {defaultImageLoadFunction} from './Image.js';
+import {createLoader, getFeatureInfoUrl, getLegendUrl} from './wms.js';
 
 /**
  * @typedef {Object} Options
@@ -14,6 +14,7 @@ import {get as getProjection, transform} from '../proj.js';
  * @property {null|string} [crossOrigin] The `crossOrigin` attribute for loaded images.  Note that
  * you must provide a `crossOrigin` value if you want to access pixel data with the Canvas renderer.
  * See https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image for more detail.
+ * @property {ReferrerPolicy} [referrerPolicy] The `referrerPolicy` property for loaded images.
  * @property {boolean} [hidpi=true] Use the `ol/Map#pixelRatio` value when requesting
  * the image from the remote server.
  * @property {import("./wms.js").ServerType} [serverType] The type of
@@ -64,6 +65,12 @@ class ImageWMS extends ImageSource {
 
     /**
      * @private
+     * @type {ReferrerPolicy}
+     */
+    this.referrerPolicy_ = options.referrerPolicy;
+
+    /**
+     * @private
      * @type {string|undefined}
      */
     this.url_ = options.url;
@@ -81,7 +88,7 @@ class ImageWMS extends ImageSource {
      * @private
      * @type {!Object}
      */
-    this.params_ = options.params;
+    this.params_ = Object.assign({}, options.params);
 
     /**
      * @private
@@ -106,6 +113,12 @@ class ImageWMS extends ImageSource {
      * @type {number}
      */
     this.ratio_ = options.ratio !== undefined ? options.ratio : 1.5;
+
+    /**
+     * @private
+     * @type {import("../proj/Projection.js").default}
+     */
+    this.loaderProjection_ = null;
   }
 
   /**
@@ -131,7 +144,7 @@ class ImageWMS extends ImageSource {
         sourceProjectionObj,
         projectionObj,
         coordinate,
-        resolution
+        resolution,
       );
       coordinate = transform(coordinate, projectionObj, sourceProjectionObj);
     }
@@ -170,7 +183,7 @@ class ImageWMS extends ImageSource {
           ...params,
         },
       },
-      resolution
+      resolution,
     );
   }
 
@@ -190,15 +203,18 @@ class ImageWMS extends ImageSource {
    * @param {number} pixelRatio Pixel ratio.
    * @param {import("../proj/Projection.js").default} projection Projection.
    * @return {import("../Image.js").default} Single image.
+   * @override
    */
   getImageInternal(extent, resolution, pixelRatio, projection) {
     if (this.url_ === undefined) {
       return null;
     }
-    if (!this.loader) {
+    if (!this.loader || this.loaderProjection_ !== projection) {
       // Lazily create loader to pick up the view projection and to allow `params` updates
+      this.loaderProjection_ = projection;
       this.loader = createLoader({
         crossOrigin: this.crossOrigin_,
+        referrerPolicy: this.referrerPolicy_,
         params: this.params_,
         projection: projection,
         serverType: this.serverType_,
@@ -258,6 +274,18 @@ class ImageWMS extends ImageSource {
   }
 
   /**
+   * Set the user-provided params.
+   * @param {Object} params Params.
+   * @api
+   */
+  setParams(params) {
+    this.params_ = Object.assign({}, params);
+    // Reset loader to pick up new params
+    this.loader = null;
+    this.changed();
+  }
+
+  /**
    * Update the user-provided params.
    * @param {Object} params Params.
    * @api
@@ -267,6 +295,9 @@ class ImageWMS extends ImageSource {
     this.changed();
   }
 
+  /**
+   * @override
+   */
   changed() {
     this.image = null;
     super.changed();

@@ -1,10 +1,9 @@
 import Feature from '../../../../src/ol/Feature.js';
 import Map from '../../../../src/ol/Map.js';
-import Polygon from '../../../../src/ol/geom/Polygon.js';
-import VectorTile from '../../../../src/ol/layer/VectorTile.js';
-import VectorTileSource from '../../../../src/ol/source/VectorTile.js';
 import View from '../../../../src/ol/View.js';
-import WebGLVectorTileLayerRenderer from '../../../../src/ol/renderer/webgl/VectorTileLayer.js';
+import Polygon from '../../../../src/ol/geom/Polygon.js';
+import WebGLVectorTileLayer from '../../../../src/ol/layer/WebGLVectorTile.js';
+import VectorTileSource from '../../../../src/ol/source/VectorTile.js';
 
 const source = new VectorTileSource({
   tileSize: 64,
@@ -40,26 +39,18 @@ const source = new VectorTileSource({
   },
 });
 
-class WebGLVectorTileLayer extends VectorTile {
-  createRenderer() {
-    return new WebGLVectorTileLayerRenderer(this, {
-      className: this.getClassName(),
-      style: {
-        'fill-color': '#eee',
-        'stroke-color': 'rgba(136,136,136, 0.5)',
-        'stroke-width': 2,
-        'circle-radius': 2,
-        'circle-fill-color': '#707070',
-      },
-    });
-  }
-}
-
 const map = new Map({
   pixelRatio: 2,
   layers: [
     new WebGLVectorTileLayer({
       source,
+      style: {
+        'fill-color': '#eee',
+        'stroke-color': 'rgba(136,136,136, 0.5)',
+        'stroke-width': 1,
+        'circle-radius': 2,
+        'circle-fill-color': '#707070',
+      },
     }),
   ],
   target: 'map',

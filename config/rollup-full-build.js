@@ -1,10 +1,10 @@
 import commonjs from '@rollup/plugin-commonjs';
-import externalGlobals from 'rollup-plugin-external-globals';
 import resolve from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
+import externalGlobals from 'rollup-plugin-external-globals';
 
 export default {
-  input: 'build/index.js',
+  input: 'build/ol/dist/ol.js',
   output: {
     name: 'ol',
     format: 'iife',
@@ -18,6 +18,7 @@ export default {
     externalGlobals({
       geotiff: 'GeoTIFF',
       'ol-mapbox-style': 'olms',
+      zarrita: 'zarr',
     }),
     terser(),
   ],

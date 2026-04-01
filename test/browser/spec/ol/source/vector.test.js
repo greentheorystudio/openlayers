@@ -1,22 +1,23 @@
+import {spy as sinonSpy} from 'sinon';
 import Collection from '../../../../../src/ol/Collection.js';
 import Feature from '../../../../../src/ol/Feature.js';
+import Map from '../../../../../src/ol/Map.js';
+import View from '../../../../../src/ol/View.js';
+import {listen} from '../../../../../src/ol/events.js';
+import {isEmpty} from '../../../../../src/ol/extent.js';
 import GeoJSON from '../../../../../src/ol/format/GeoJSON.js';
 import LineString from '../../../../../src/ol/geom/LineString.js';
-import Map from '../../../../../src/ol/Map.js';
 import Point from '../../../../../src/ol/geom/Point.js';
-import RenderFeature from '../../../../../src/ol/render/Feature.js';
 import VectorLayer from '../../../../../src/ol/layer/Vector.js';
-import VectorSource from '../../../../../src/ol/source/Vector.js';
-import View from '../../../../../src/ol/View.js';
-import sinon from 'sinon';
 import {bbox as bboxStrategy} from '../../../../../src/ol/loadingstrategy.js';
 import {
   fromLonLat,
   get as getProjection,
   transformExtent,
 } from '../../../../../src/ol/proj.js';
+import RenderFeature from '../../../../../src/ol/render/Feature.js';
+import VectorSource from '../../../../../src/ol/source/Vector.js';
 import {getUid} from '../../../../../src/ol/util.js';
-import {listen} from '../../../../../src/ol/events.js';
 
 describe('ol/source/Vector', function () {
   let pointFeature;
@@ -32,9 +33,19 @@ describe('ol/source/Vector', function () {
       vectorSource = new VectorSource();
     });
 
+    describe('#getExtent', function () {
+      it('returns null when `useSpatialIndex` is `false`', () => {
+        const source = new VectorSource({useSpatialIndex: false});
+        expect(source.getExtent()).to.be(null);
+      });
+      it('returns an empty extent when no features', () => {
+        expect(isEmpty(vectorSource.getExtent())).to.be(true);
+      });
+    });
+
     describe('#forEachFeatureInExtent', function () {
       it('does not call the callback', function () {
-        const f = sinon.spy();
+        const f = sinonSpy();
         vectorSource.forEachFeatureInExtent(infiniteExtent, f);
         expect(f.called).to.be(false);
       });
@@ -92,7 +103,7 @@ describe('ol/source/Vector', function () {
       });
 
       it('fires a change event', function () {
-        const listener = sinon.spy();
+        const listener = sinonSpy();
         listen(vectorSource, 'change', listener);
         vectorSource.addFeature(pointFeature);
         expect(listener.called).to.be(true);
@@ -157,8 +168,8 @@ describe('ol/source/Vector', function () {
           new LineString([
             [0, 0],
             [10, 10],
-          ])
-        )
+          ]),
+        ),
       );
       features.push(new Feature(new Point([0, 10])));
       features.push(new Feature(new Point([10, 5])));
@@ -178,7 +189,7 @@ describe('ol/source/Vector', function () {
           [1, 9],
           function (feature) {
             return feature.getGeometry().getType() == 'LineString';
-          }
+          },
         );
         expect(feature).to.be(features[0]);
       });
@@ -191,7 +202,7 @@ describe('ol/source/Vector', function () {
           features: vectorSource.getFeatures(),
         });
         expect(noSpatialIndexSource.getFeatures()).to.not.be(
-          noSpatialIndexSource.getFeaturesCollection().getArray()
+          noSpatialIndexSource.getFeaturesCollection().getArray(),
         );
       });
     });
@@ -221,7 +232,7 @@ describe('ol/source/Vector', function () {
         }),
       });
       map.once('rendercomplete', function () {
-        spy = sinon.spy(source, 'loader_');
+        spy = sinonSpy(source, 'loader_');
         done();
       });
     });
@@ -230,8 +241,7 @@ describe('ol/source/Vector', function () {
       if (spy) {
         source.loader_.restore();
       }
-      document.body.removeChild(map.getTargetElement());
-      map.setTarget(null);
+      disposeMap(map);
     });
 
     it('#refresh() reloads from server', function (done) {
@@ -293,9 +303,9 @@ describe('ol/source/Vector', function () {
 
     describe('#clear', function () {
       it('removes all features using fast path', function () {
-        const removeFeatureSpy = sinon.spy();
+        const removeFeatureSpy = sinonSpy();
         listen(vectorSource, 'removefeature', removeFeatureSpy);
-        const clearSourceSpy = sinon.spy();
+        const clearSourceSpy = sinonSpy();
         listen(vectorSource, 'clear', clearSourceSpy);
         vectorSource.clear(true);
         expect(vectorSource.getFeatures()).to.eql([]);
@@ -307,9 +317,9 @@ describe('ol/source/Vector', function () {
       });
 
       it('removes all features using slow path', function () {
-        const removeFeatureSpy = sinon.spy();
+        const removeFeatureSpy = sinonSpy();
         listen(vectorSource, 'removefeature', removeFeatureSpy);
-        const clearSourceSpy = sinon.spy();
+        const clearSourceSpy = sinonSpy();
         listen(vectorSource, 'clear', clearSourceSpy);
         vectorSource.clear();
         expect(vectorSource.getFeatures()).to.eql([]);
@@ -323,7 +333,7 @@ describe('ol/source/Vector', function () {
 
     describe('#forEachFeatureInExtent', function () {
       it('is called the expected number of times', function () {
-        const f = sinon.spy();
+        const f = sinonSpy();
         vectorSource.forEachFeatureInExtent(infiniteExtent, f);
         expect(f.callCount).to.be(10);
       });
@@ -334,7 +344,7 @@ describe('ol/source/Vector', function () {
           infiniteExtent,
           function (f) {
             return ++count == 5;
-          }
+          },
         );
         expect(result).to.be(true);
         expect(count).to.be(5);
@@ -344,7 +354,7 @@ describe('ol/source/Vector', function () {
     describe('#getFeaturesInExtent', function () {
       it('returns the expected number of features', function () {
         expect(vectorSource.getFeaturesInExtent(infiniteExtent)).to.have.length(
-          10
+          10,
         );
       });
     });
@@ -361,30 +371,56 @@ describe('ol/source/Vector', function () {
         for (i = features.length - 1; i >= 0; --i) {
           vectorSource.removeFeature(features[i]);
           expect(vectorSource.getFeaturesInExtent(infiniteExtent)).have.length(
-            i
+            i,
           );
         }
       });
 
+      it('works as expected for renderfeatures', function () {
+        const feature1 = new RenderFeature(
+          'Polygon',
+          [1, 1, 1, 2, 2, 1, 2, 2],
+          [],
+          2,
+          {},
+          'foo',
+        );
+        const feature2 = new RenderFeature(
+          'Polygon',
+          [1, 1, 1, 2, 2, 1, 2, 2],
+          [],
+          2,
+          {},
+          'foo',
+        );
+
+        const vectorSource = new VectorSource({features: [feature1, feature2]});
+        expect(vectorSource.getFeatureById('foo')).to.eql([feature1, feature2]);
+        vectorSource.removeFeature(feature1);
+        expect(vectorSource.getFeatureById('foo')).to.be(feature2);
+        vectorSource.removeFeature(feature2);
+        expect(vectorSource.getFeatureById('foo')).to.be(null);
+      });
+
       it('fires a change event', function () {
-        const listener = sinon.spy();
+        const listener = sinonSpy();
         listen(vectorSource, 'change', listener);
         vectorSource.removeFeature(features[0]);
         expect(listener.called).to.be(true);
       });
 
       it('fires a removefeature event', function () {
-        const listener = sinon.spy();
+        const listener = sinonSpy();
         listen(vectorSource, 'removefeature', listener);
         vectorSource.removeFeature(features[0]);
         expect(listener.called).to.be(true);
       });
 
       it('accepts features that are not in the source', function () {
-        const changeListener = sinon.spy();
+        const changeListener = sinonSpy();
         listen(vectorSource, 'change', changeListener);
 
-        const removeFeatureListener = sinon.spy();
+        const removeFeatureListener = sinonSpy();
         listen(vectorSource, 'removefeature', removeFeatureListener);
 
         const feature = new Feature(new Point([0, 0]));
@@ -397,15 +433,15 @@ describe('ol/source/Vector', function () {
     describe("modifying a feature's geometry", function () {
       it('keeps the R-Tree index up to date', function () {
         expect(vectorSource.getFeaturesInExtent([0, 0, 1, 1])).to.have.length(
-          10
+          10,
         );
         features[0].getGeometry().setCoordinates([100, 100]);
         expect(vectorSource.getFeaturesInExtent([0, 0, 1, 1])).to.have.length(
-          9
+          9,
         );
         features[0].getGeometry().setCoordinates([0.5, 0.5]);
         expect(vectorSource.getFeaturesInExtent([0, 0, 1, 1])).to.have.length(
-          10
+          10,
         );
       });
     });
@@ -413,11 +449,11 @@ describe('ol/source/Vector', function () {
     describe('setting a features geometry', function () {
       it('keeps the R-Tree index up to date', function () {
         expect(vectorSource.getFeaturesInExtent([0, 0, 1, 1])).to.have.length(
-          10
+          10,
         );
         features[0].setGeometry(new Point([100, 100]));
         expect(vectorSource.getFeaturesInExtent([0, 0, 1, 1])).to.have.length(
-          9
+          9,
         );
       });
     });
@@ -466,7 +502,7 @@ describe('ol/source/Vector', function () {
     it("fires a change event when setting a feature's property", function () {
       const feature = new Feature(new Point([1, 1]));
       vectorSource.addFeature(feature);
-      const listener = sinon.spy();
+      const listener = sinonSpy();
       listen(vectorSource, 'change', listener);
       feature.set('foo', 'bar');
       expect(listener.called).to.be(true);
@@ -475,7 +511,7 @@ describe('ol/source/Vector', function () {
     it('fires a changefeature event when updating a feature', function () {
       const feature = new Feature(new Point([1, 1]));
       vectorSource.addFeature(feature);
-      const listener = sinon.spy(function (event) {
+      const listener = sinonSpy(function (event) {
         expect(event.feature).to.be(feature);
       });
       vectorSource.on('changefeature', listener);
@@ -632,7 +668,7 @@ describe('ol/source/Vector', function () {
       source.loadFeatures(
         [-10000, -10000, 10000, 10000],
         1,
-        getProjection('EPSG:3857')
+        getProjection('EPSG:3857'),
       );
     });
 
@@ -650,7 +686,7 @@ describe('ol/source/Vector', function () {
       source.loadFeatures(
         [-10000, -10000, 10000, 10000],
         1,
-        getProjection('EPSG:3857')
+        getProjection('EPSG:3857'),
       );
     });
 
@@ -667,7 +703,7 @@ describe('ol/source/Vector', function () {
       source.loadFeatures(
         [-10000, -10000, 10000, 10000],
         1,
-        getProjection('EPSG:3857')
+        getProjection('EPSG:3857'),
       );
     });
 
@@ -681,7 +717,7 @@ describe('ol/source/Vector', function () {
               const lonLatExtent = transformExtent(
                 extent,
                 'EPSG:3857',
-                'EPSG:4326'
+                'EPSG:4326',
               );
               expect(lonLatExtent[0]).to.roughlyEqual(-99.259349218, 1e-9);
               expect(lonLatExtent[2]).to.roughlyEqual(-95.963450781, 1e-9);
@@ -706,8 +742,7 @@ describe('ol/source/Vector', function () {
           }),
         });
         map.renderSync();
-        map.setTarget(null);
-        document.body.removeChild(div);
+        disposeMap(map);
       });
     });
 
@@ -717,7 +752,7 @@ describe('ol/source/Vector', function () {
         source.loadFeatures(
           [-10000, -10000, 10000, 10000],
           1,
-          getProjection('EPSG:3857')
+          getProjection('EPSG:3857'),
         );
         const loadedExtents = source.loadedExtentsRtree_.getAll();
         expect(loadedExtents).to.have.length(1);
@@ -744,14 +779,14 @@ describe('ol/source/Vector', function () {
         source.loadFeatures(
           [-10000, -10000, 10000, 10000],
           1,
-          getProjection('EPSG:3857')
+          getProjection('EPSG:3857'),
         );
         source.setLoader(loader2);
         source.refresh();
         source.loadFeatures(
           [-10000, -10000, 10000, 10000],
           1,
-          getProjection('EPSG:3857')
+          getProjection('EPSG:3857'),
         );
         expect(count1).to.eql(1);
         expect(count2).to.eql(1);
@@ -770,13 +805,13 @@ describe('ol/source/Vector', function () {
         source.loadFeatures(
           [-10000, -10000, 10000, 10000],
           1,
-          getProjection('EPSG:3857')
+          getProjection('EPSG:3857'),
         );
       });
 
       it('fires the FEATURESLOADEND event if the load function uses the callback', function (done) {
         const source = new VectorSource();
-        const spy = sinon.spy();
+        const spy = sinonSpy();
         source.on('featuresloadend', spy);
 
         const features = [new Feature(), new Feature()];
@@ -793,32 +828,28 @@ describe('ol/source/Vector', function () {
         source.loadFeatures(
           [-10000, -10000, 10000, 10000],
           1,
-          getProjection('EPSG:3857')
+          getProjection('EPSG:3857'),
         );
       });
 
       it('fires the FEATURESLOADERROR event if the load function uses the callback', function (done) {
         const source = new VectorSource();
-        const spy = sinon.spy();
+        const spy = sinonSpy();
         source.on('featuresloaderror', spy);
 
-        source.setLoader(function (
-          bbox,
-          resolution,
-          projection,
-          success,
-          failure
-        ) {
-          failure();
-          setTimeout(function () {
-            expect(spy.calledOnce).to.be(true);
-            done();
-          }, 0);
-        });
+        source.setLoader(
+          function (bbox, resolution, projection, success, failure) {
+            failure();
+            setTimeout(function () {
+              expect(spy.calledOnce).to.be(true);
+              done();
+            }, 0);
+          },
+        );
         source.loadFeatures(
           [-10000, -10000, 10000, 10000],
           1,
-          getProjection('EPSG:3857')
+          getProjection('EPSG:3857'),
         );
       });
     });
@@ -880,7 +911,7 @@ describe('ol/source/Vector', function () {
 
     it('#forEachFeatureInExtent loops through all features', function () {
       source.addFeatures([new Feature(), new Feature()]);
-      const spy = sinon.spy();
+      const spy = sinonSpy();
       source.forEachFeatureInExtent([0, 0, 0, 0], spy);
       expect(spy.callCount).to.be(2);
     });
@@ -1005,7 +1036,7 @@ describe('ol/source/Vector', function () {
       const projection = getProjection('EPSG:4326');
 
       expect(
-        source.getFeaturesInExtent([-180, -90, 180, 90], projection).length
+        source.getFeaturesInExtent([-180, -90, 180, 90], projection).length,
       ).to.be(3);
       const onlyB = source.getFeaturesInExtent([1, -90, 180, 90], projection);
       expect(onlyB.length).to.be(1);
@@ -1021,7 +1052,7 @@ describe('ol/source/Vector', function () {
 
       const bAndCAgain = source.getFeaturesInExtent(
         [-182, -90, -1, 90],
-        projection
+        projection,
       );
       expect(bAndCAgain.length).to.be(2);
       expect(bAndCAgain).to.contain(b);

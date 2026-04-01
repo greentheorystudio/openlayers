@@ -1,12 +1,12 @@
-import Cluster from '../../../../../src/ol/source/Cluster.js';
-import EventType from '../../../../../src/ol/events/EventType.js';
 import Feature from '../../../../../src/ol/Feature.js';
+import EventType from '../../../../../src/ol/events/EventType.js';
 import LineString from '../../../../../src/ol/geom/LineString.js';
 import Point from '../../../../../src/ol/geom/Point.js';
 import Polygon from '../../../../../src/ol/geom/Polygon.js';
+import {get as getProjection} from '../../../../../src/ol/proj.js';
+import Cluster from '../../../../../src/ol/source/Cluster.js';
 import Source from '../../../../../src/ol/source/Source.js';
 import VectorSource from '../../../../../src/ol/source/Vector.js';
-import {get as getProjection} from '../../../../../src/ol/proj.js';
 
 describe('ol.source.Cluster', function () {
   describe('constructor', function () {
@@ -66,7 +66,7 @@ describe('ol.source.Cluster', function () {
               new LineString([
                 [0, 0],
                 [1, 1],
-              ])
+              ]),
             ),
             new Feature(
               new Polygon([
@@ -77,7 +77,7 @@ describe('ol.source.Cluster', function () {
                   [1, -1],
                   [-1, -1],
                 ],
-              ])
+              ]),
             ),
           ],
         }),

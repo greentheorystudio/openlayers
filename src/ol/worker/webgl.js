@@ -2,16 +2,16 @@
  * A worker that does cpu-heavy tasks related to webgl rendering.
  * @module ol/worker/webgl
  */
+import {
+  writeLineSegmentToBuffers,
+  writePointFeatureToBuffers,
+  writePolygonTrianglesToBuffers,
+} from '../render/webgl/bufferUtil.js';
 import {WebGLWorkerMessageType} from '../render/webgl/constants.js';
 import {
   create as createTransform,
   makeInverse as makeInverseTransform,
 } from '../transform.js';
-import {
-  writeLineSegmentToBuffers,
-  writePointFeatureToBuffers,
-  writePolygonTrianglesToBuffers,
-} from '../render/webgl/utils.js';
 
 /** @type {any} */
 const worker = self;
@@ -20,8 +20,7 @@ worker.onmessage = (event) => {
   const received = event.data;
   switch (received.type) {
     case WebGLWorkerMessageType.GENERATE_POINT_BUFFERS: {
-      // This is specific to point features (x, y, index)
-      const baseVertexAttrsCount = 3;
+      const baseIndicesAttrsCount = 2; // x, y
       const baseInstructionsCount = 2;
 
       const customAttrsCount = received.customAttributesSize;
@@ -29,47 +28,52 @@ worker.onmessage = (event) => {
       const renderInstructions = new Float32Array(received.renderInstructions);
 
       const elementsCount = renderInstructions.length / instructionsCount;
-      const indicesCount = elementsCount * 6;
-      const verticesCount =
-        elementsCount * 4 * (customAttrsCount + baseVertexAttrsCount);
-      const indexBuffer = new Uint32Array(indicesCount);
-      const vertexBuffer = new Float32Array(verticesCount);
+      const instanceAttributesCount =
+        elementsCount * (baseIndicesAttrsCount + customAttrsCount);
+      const indicesBuffer = Uint32Array.from([0, 1, 3, 1, 2, 3]);
+      const vertexAttributesBuffer = Float32Array.from([
+        -1, -1, 1, -1, 1, 1, -1, 1,
+      ]); // local position
+      const instanceAttributesBuffer = new Float32Array(
+        instanceAttributesCount,
+      );
 
       let bufferPositions;
       for (let i = 0; i < renderInstructions.length; i += instructionsCount) {
         bufferPositions = writePointFeatureToBuffers(
           renderInstructions,
           i,
-          vertexBuffer,
-          indexBuffer,
+          instanceAttributesBuffer,
           customAttrsCount,
-          bufferPositions
+          bufferPositions,
         );
       }
 
       /** @type {import('../render/webgl/constants.js').WebGLWorkerGenerateBuffersMessage} */
       const message = Object.assign(
         {
-          vertexBuffer: vertexBuffer.buffer,
-          indexBuffer: indexBuffer.buffer,
+          indicesBuffer: indicesBuffer.buffer,
+          vertexAttributesBuffer: vertexAttributesBuffer.buffer,
+          instanceAttributesBuffer: instanceAttributesBuffer.buffer,
           renderInstructions: renderInstructions.buffer,
         },
-        received
+        received,
       );
 
       worker.postMessage(message, [
-        vertexBuffer.buffer,
-        indexBuffer.buffer,
+        vertexAttributesBuffer.buffer,
+        instanceAttributesBuffer.buffer,
+        indicesBuffer.buffer,
         renderInstructions.buffer,
       ]);
       break;
     }
     case WebGLWorkerMessageType.GENERATE_LINE_STRING_BUFFERS: {
-      const vertices = [];
-      const indices = [];
+      /** @type {Array<number>} */
+      const instanceAttributes = [];
 
       const customAttrsCount = received.customAttributesSize;
-      const instructionsPerVertex = 2;
+      const instructionsPerVertex = 3;
 
       const renderInstructions = new Float32Array(received.renderInstructions);
       let currentInstructionsIndex = 0;
@@ -83,8 +87,8 @@ worker.onmessage = (event) => {
         customAttributes = Array.from(
           renderInstructions.slice(
             currentInstructionsIndex,
-            currentInstructionsIndex + customAttrsCount
-          )
+            currentInstructionsIndex + customAttrsCount,
+          ),
         );
         currentInstructionsIndex += customAttrsCount;
         verticesCount = renderInstructions[currentInstructionsIndex++];
@@ -100,6 +104,7 @@ worker.onmessage = (event) => {
             renderInstructions[lastInstructionsIndex + 1];
 
         let currentLength = 0;
+        let currentAngleTangentSum = 0;
 
         // last point is only a segment end, do not loop over it
         for (let i = 0; i < verticesCount - 1; i++) {
@@ -117,44 +122,53 @@ worker.onmessage = (event) => {
           } else if (isLoop) {
             afterIndex = firstInstructionsIndex + instructionsPerVertex;
           }
-          currentLength = writeLineSegmentToBuffers(
+          const measures = writeLineSegmentToBuffers(
             renderInstructions,
             currentInstructionsIndex + i * instructionsPerVertex,
             currentInstructionsIndex + (i + 1) * instructionsPerVertex,
             beforeIndex,
             afterIndex,
-            vertices,
-            indices,
+            instanceAttributes,
             customAttributes,
             invertTransform,
-            currentLength
+            currentLength,
+            currentAngleTangentSum,
           );
+          currentLength = measures.length;
+          currentAngleTangentSum = measures.angle;
         }
         currentInstructionsIndex += verticesCount * instructionsPerVertex;
       }
 
-      const indexBuffer = Uint32Array.from(indices);
-      const vertexBuffer = Float32Array.from(vertices);
+      const indicesBuffer = Uint32Array.from([0, 1, 3, 1, 2, 3]);
+      const vertexAttributesBuffer = Float32Array.from([
+        -1, -1, 1, -1, 1, 1, -1, 1,
+      ]); // local position
+      const instanceAttributesBuffer = Float32Array.from(instanceAttributes);
 
       /** @type {import('../render/webgl/constants.js').WebGLWorkerGenerateBuffersMessage} */
       const message = Object.assign(
         {
-          vertexBuffer: vertexBuffer.buffer,
-          indexBuffer: indexBuffer.buffer,
+          indicesBuffer: indicesBuffer.buffer,
+          vertexAttributesBuffer: vertexAttributesBuffer.buffer,
+          instanceAttributesBuffer: instanceAttributesBuffer.buffer,
           renderInstructions: renderInstructions.buffer,
         },
-        received
+        received,
       );
 
       worker.postMessage(message, [
-        vertexBuffer.buffer,
-        indexBuffer.buffer,
+        vertexAttributesBuffer.buffer,
+        instanceAttributesBuffer.buffer,
+        indicesBuffer.buffer,
         renderInstructions.buffer,
       ]);
       break;
     }
     case WebGLWorkerMessageType.GENERATE_POLYGON_BUFFERS: {
+      /** @type {Array<number>} */
       const vertices = [];
+      /** @type {Array<number>} */
       const indices = [];
 
       const customAttrsCount = received.customAttributesSize;
@@ -167,26 +181,29 @@ worker.onmessage = (event) => {
           currentInstructionsIndex,
           vertices,
           indices,
-          customAttrsCount
+          customAttrsCount,
         );
       }
 
-      const indexBuffer = Uint32Array.from(indices);
-      const vertexBuffer = Float32Array.from(vertices);
+      const indicesBuffer = Uint32Array.from(indices);
+      const vertexAttributesBuffer = Float32Array.from(vertices);
+      const instanceAttributesBuffer = Float32Array.from([]); // TODO
 
       /** @type {import('../render/webgl/constants.js').WebGLWorkerGenerateBuffersMessage} */
       const message = Object.assign(
         {
-          vertexBuffer: vertexBuffer.buffer,
-          indexBuffer: indexBuffer.buffer,
+          indicesBuffer: indicesBuffer.buffer,
+          vertexAttributesBuffer: vertexAttributesBuffer.buffer,
+          instanceAttributesBuffer: instanceAttributesBuffer.buffer,
           renderInstructions: renderInstructions.buffer,
         },
-        received
+        received,
       );
 
       worker.postMessage(message, [
-        vertexBuffer.buffer,
-        indexBuffer.buffer,
+        vertexAttributesBuffer.buffer,
+        instanceAttributesBuffer.buffer,
+        indicesBuffer.buffer,
         renderInstructions.buffer,
       ]);
       break;
@@ -196,4 +213,4 @@ worker.onmessage = (event) => {
   }
 };
 
-export let create;
+/** @type {function(): Worker} */ export let create;

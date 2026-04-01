@@ -1,23 +1,24 @@
+import {spy as sinonSpy} from 'sinon';
 import Disposable from '../../../../../src/ol/Disposable.js';
 import Feature from '../../../../../src/ol/Feature.js';
 import Map from '../../../../../src/ol/Map.js';
-import MapRenderer from '../../../../../src/ol/renderer/Map.js';
-import VectorLayer from '../../../../../src/ol/layer/Vector.js';
-import VectorSource from '../../../../../src/ol/source/Vector.js';
 import View from '../../../../../src/ol/View.js';
-import {Circle, Fill, Stroke, Style} from '../../../../../src/ol/style.js';
-import {
-  Circle as CircleGeometry,
-  GeometryCollection,
-  LineString,
-  MultiLineString,
-  MultiPoint,
-  MultiPolygon,
-  Point,
-  Polygon,
-} from '../../../../../src/ol/geom.js';
-import {Projection} from '../../../../../src/ol/proj.js';
-import {fromExtent} from '../../../../../src/ol/geom/Polygon.js';
+import CircleGeometry from '../../../../../src/ol/geom/Circle.js';
+import GeometryCollection from '../../../../../src/ol/geom/GeometryCollection.js';
+import LineString from '../../../../../src/ol/geom/LineString.js';
+import MultiLineString from '../../../../../src/ol/geom/MultiLineString.js';
+import MultiPoint from '../../../../../src/ol/geom/MultiPoint.js';
+import MultiPolygon from '../../../../../src/ol/geom/MultiPolygon.js';
+import Point from '../../../../../src/ol/geom/Point.js';
+import Polygon, {fromExtent} from '../../../../../src/ol/geom/Polygon.js';
+import VectorLayer from '../../../../../src/ol/layer/Vector.js';
+import Projection from '../../../../../src/ol/proj/Projection.js';
+import MapRenderer from '../../../../../src/ol/renderer/Map.js';
+import VectorSource from '../../../../../src/ol/source/Vector.js';
+import Circle from '../../../../../src/ol/style/Circle.js';
+import Fill from '../../../../../src/ol/style/Fill.js';
+import Stroke from '../../../../../src/ol/style/Stroke.js';
+import Style from '../../../../../src/ol/style/Style.js';
 
 describe('ol/renderer/Map.js', function () {
   describe('constructor', function () {
@@ -50,8 +51,7 @@ describe('ol/renderer/Map.js', function () {
       });
 
       afterEach(function () {
-        document.body.removeChild(map.getTargetElement());
-        map.setTarget(null);
+        disposeMap(map);
       });
 
       it('calls callback with feature, layer and geometry', function () {
@@ -59,7 +59,7 @@ describe('ol/renderer/Map.js', function () {
         const point = new Point([0, 0]);
         const polygon = fromExtent([0, -1e6, 1e6, 1e6]);
         const geometryCollection = new Feature(
-          new GeometryCollection([polygon, point])
+          new GeometryCollection([polygon, point]),
         );
         const multiPoint = new MultiPoint([
           [-1e6, -1e6],
@@ -79,7 +79,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit.feature).to.be(geometryCollection);
         expect(hit.layer).to.be(layer);
@@ -90,7 +90,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit.feature).to.be(geometryCollection);
         expect(hit.geometry).to.be(polygon);
@@ -100,7 +100,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit.feature).to.be(multiGeometry);
         expect(hit.geometry).to.be(multiPoint);
@@ -115,7 +115,7 @@ describe('ol/renderer/Map.js', function () {
           new View({
             center: [4.5, 7],
             resolution: 0.05,
-          })
+          }),
         );
 
         const styles = {
@@ -216,7 +216,7 @@ describe('ol/renderer/Map.js', function () {
 
         function hitTest(coordinate) {
           const features = map.getFeaturesAtPixel(
-            map.getPixelFromCoordinate(coordinate)
+            map.getPixelFromCoordinate(coordinate),
           );
           const result = {count: 0};
           if (features && features.length > 0) {
@@ -348,7 +348,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit).to.be.ok();
         expect(hit.feature).to.be(feature);
@@ -369,7 +369,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit).to.be.ok();
         expect(hit.feature).to.be(feature);
@@ -393,7 +393,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit).to.be.ok();
         expect(hit.feature).to.be(feature);
@@ -419,7 +419,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit).to.be.ok();
         expect(hit.feature).to.be(feature);
@@ -435,7 +435,131 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
+        );
+        expect(hit).to.be.ok();
+        expect(hit.feature).to.be(feature);
+        expect(hit.layer).to.be(layer);
+        expect(hit.geometry).to.be(geometry);
+      });
+
+      it('hits lines even if they are transparent', function () {
+        map.getView().setResolution(1);
+        let geometry, hit;
+        const feature = new Feature();
+        const layer = new VectorLayer({
+          source: new VectorSource({
+            features: [feature],
+          }),
+          style: new Style({
+            stroke: new Stroke({
+              color: 'rgba(0, 0, 0, 0)',
+              width: 8,
+            }),
+          }),
+        });
+        map.addLayer(layer);
+
+        geometry = new LineString([
+          [-20, 0],
+          [20, 0],
+        ]);
+        feature.setGeometry(geometry);
+        map.renderSync();
+        hit = map.forEachFeatureAtPixel(
+          [50, 50],
+          (feature, layer, geometry) => ({
+            feature,
+            layer,
+            geometry,
+          }),
+        );
+        expect(hit).to.be.ok();
+        expect(hit.feature).to.be(feature);
+        expect(hit.layer).to.be(layer);
+        expect(hit.geometry).to.be(geometry);
+
+        geometry = new MultiLineString([
+          [
+            [-20, 0],
+            [20, 0],
+          ],
+        ]);
+        feature.setGeometry(geometry);
+        map.renderSync();
+        hit = map.forEachFeatureAtPixel(
+          [50, 50],
+          (feature, layer, geometry) => ({
+            feature,
+            layer,
+            geometry,
+          }),
+        );
+        expect(hit).to.be.ok();
+        expect(hit.feature).to.be(feature);
+        expect(hit.layer).to.be(layer);
+        expect(hit.geometry).to.be(geometry);
+
+        geometry = new Polygon([
+          [
+            [-20, 0],
+            [20, 0],
+            [20, -20],
+            [-20, -20],
+            [-20, 0],
+          ],
+        ]);
+        feature.setGeometry(geometry);
+        map.renderSync();
+        hit = map.forEachFeatureAtPixel(
+          [50, 50],
+          (feature, layer, geometry) => ({
+            feature,
+            layer,
+            geometry,
+          }),
+        );
+        expect(hit).to.be.ok();
+        expect(hit.feature).to.be(feature);
+        expect(hit.layer).to.be(layer);
+        expect(hit.geometry).to.be(geometry);
+
+        geometry = new MultiPolygon([
+          [
+            [
+              [-20, 0],
+              [20, 0],
+              [20, -20],
+              [-20, -20],
+              [-20, 0],
+            ],
+          ],
+        ]);
+        feature.setGeometry(geometry);
+        map.renderSync();
+        hit = map.forEachFeatureAtPixel(
+          [50, 50],
+          (feature, layer, geometry) => ({
+            feature,
+            layer,
+            geometry,
+          }),
+        );
+        expect(hit).to.be.ok();
+        expect(hit.feature).to.be(feature);
+        expect(hit.layer).to.be(layer);
+        expect(hit.geometry).to.be(geometry);
+
+        geometry = new CircleGeometry([0, -40 / Math.PI], 40 / Math.PI);
+        feature.setGeometry(geometry);
+        map.renderSync();
+        hit = map.forEachFeatureAtPixel(
+          [50, 50],
+          (feature, layer, geometry) => ({
+            feature,
+            layer,
+            geometry,
+          }),
         );
         expect(hit).to.be.ok();
         expect(hit.feature).to.be(feature);
@@ -470,7 +594,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit).to.be.ok();
         expect(hit.feature).to.be(feature);
@@ -493,7 +617,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit).to.be(undefined);
 
@@ -513,7 +637,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit).to.be.ok();
         expect(hit.feature).to.be(feature);
@@ -537,7 +661,7 @@ describe('ol/renderer/Map.js', function () {
             feature,
             layer,
             geometry,
-          })
+          }),
         );
         expect(hit).to.be.ok();
         expect(hit.feature).to.be(feature);
@@ -585,7 +709,7 @@ describe('ol/renderer/Map.js', function () {
                   feature,
                   layer,
                   geometry,
-                })
+                }),
               );
               expect(hit).to.be.ok();
               expect(hit.feature).to.be(feature);
@@ -618,7 +742,7 @@ describe('ol/renderer/Map.js', function () {
                   feature,
                   layer,
                   geometry,
-                })
+                }),
               );
               expect(hit).to.be(undefined);
               done();
@@ -648,7 +772,7 @@ describe('ol/renderer/Map.js', function () {
                   feature,
                   layer,
                   geometry,
-                })
+                }),
               );
               expect(hit).to.be.ok();
               expect(hit.feature).to.be(feature);
@@ -681,7 +805,7 @@ describe('ol/renderer/Map.js', function () {
                   feature,
                   layer,
                   geometry,
-                })
+                }),
               );
               expect(hit).to.be.ok();
               expect(hit.feature).to.be(feature);
@@ -715,35 +839,35 @@ describe('ol/renderer/Map.js', function () {
                 [10, 0],
               ].map((coordinate) => new Feature(new Point(coordinate))),
             }),
-          })
+          }),
         );
         map.renderSync();
 
         let feature = map.forEachFeatureAtPixel(
           map.getPixelFromCoordinate([8, 6]),
           (feature) => feature,
-          {hitTolerance: 20}
+          {hitTolerance: 20},
         );
         expect(feature.getGeometry().getCoordinates()).to.eql([10, 0]);
 
         feature = map.forEachFeatureAtPixel(
           map.getPixelFromCoordinate([6, -8]),
           (feature) => feature,
-          {hitTolerance: 20}
+          {hitTolerance: 20},
         );
         expect(feature.getGeometry().getCoordinates()).to.eql([0, -10]);
 
         feature = map.forEachFeatureAtPixel(
           map.getPixelFromCoordinate([-6, -4]),
           (feature) => feature,
-          {hitTolerance: 20}
+          {hitTolerance: 20},
         );
         expect(feature.getGeometry().getCoordinates()).to.eql([0, 0]);
 
         feature = map.forEachFeatureAtPixel(
           map.getPixelFromCoordinate([-6, 7]),
           (feature) => feature,
-          {hitTolerance: 20}
+          {hitTolerance: 20},
         );
         expect(feature.getGeometry().getCoordinates()).to.eql([0, 10]);
       });
@@ -791,9 +915,7 @@ describe('ol/renderer/Map.js', function () {
     });
 
     afterEach(function () {
-      const target = map.getTargetElement();
-      map.setTarget(null);
-      document.body.removeChild(target);
+      disposeMap(map);
     });
 
     it('works with custom projection', function () {
@@ -819,13 +941,13 @@ describe('ol/renderer/Map.js', function () {
     it('only draws features that intersect the hit detection viewport', function () {
       const resolution = map.getView().getResolution();
       source.addFeature(
-        new Feature(new Point([660000 + resolution * 6, 190000]))
+        new Feature(new Point([660000 + resolution * 6, 190000])),
       );
       source.addFeature(
-        new Feature(new Point([660000 - resolution * 12, 190000]))
+        new Feature(new Point([660000 - resolution * 12, 190000])),
       );
       map.renderSync();
-      const spy = sinon.spy(CanvasRenderingContext2D.prototype, 'drawImage');
+      const spy = sinonSpy(CanvasRenderingContext2D.prototype, 'drawImage');
       const features = map.getFeaturesAtPixel([50, 44]);
       expect(features.length).to.be(1);
       expect(spy.callCount).to.be(2);

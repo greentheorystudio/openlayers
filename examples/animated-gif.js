@@ -1,10 +1,13 @@
 import Feature from '../src/ol/Feature.js';
 import Map from '../src/ol/Map.js';
-import Point from '../src/ol/geom/Point.js';
 import View from '../src/ol/View.js';
-import {Icon, Style} from '../src/ol/style.js';
-import {StadiaMaps, Vector as VectorSource} from '../src/ol/source.js';
-import {Tile as TileLayer, Vector as VectorLayer} from '../src/ol/layer.js';
+import Point from '../src/ol/geom/Point.js';
+import TileLayer from '../src/ol/layer/Tile.js';
+import VectorLayer from '../src/ol/layer/Vector.js';
+import StadiaMaps from '../src/ol/source/StadiaMaps.js';
+import VectorSource from '../src/ol/source/Vector.js';
+import Icon from '../src/ol/style/Icon.js';
+import Style from '../src/ol/style/Style.js';
 
 const iconFeature = new Feature({
   geometry: new Point([0, 0]),
@@ -45,19 +48,18 @@ gif.frames(
             img: ctx.canvas,
             opacity: 0.8,
           }),
-        })
+        }),
       );
     }
     ctx.clearRect(0, 0, frame.width, frame.height);
     ctx.drawImage(frame.buffer, frame.x, frame.y);
     map.render();
   },
-  true
+  true,
 );
 
 // change mouse cursor when over icon
 map.on('pointermove', function (e) {
-  const pixel = map.getEventPixel(e.originalEvent);
-  const hit = map.hasFeatureAtPixel(pixel);
-  map.getTarget().style.cursor = hit ? 'pointer' : '';
+  const hit = map.hasFeatureAtPixel(e.pixel);
+  map.getTargetElement().style.cursor = hit ? 'pointer' : '';
 });

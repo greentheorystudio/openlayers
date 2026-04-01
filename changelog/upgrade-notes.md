@@ -1,5 +1,216 @@
 ## Upgrade notes
 
+### Next Release
+
+### 10.7.0
+
+#### Deprecation of ol/array's stableSort
+
+Sorting is guaranteed to be stable since [ECMAScript 2019](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#sort_stability).
+```js
+// Before
+stableSort(arr, compareFnc);
+```
+```js
+// After
+arr.sort(compareFnc);
+```
+
+#### Deprecation of functions in ol/format/Polyline
+
+The following functions have been deprecated without replacement:
+- decodeDeltas
+- encodeDeltas
+- decodeFloats
+- encodeFloats
+
+### 10.4.0
+
+#### Deprecation of ol/layer/WebGLPoints
+
+Use `ol/layer/WebGLVector` instead. Besides rendering points it will also render lines and polygons.
+In most cases this is a drop-in replacement. To use filtering the style and filter have to be in a nested object.
+```js
+// Before
+new WebGLPointsLayer({
+  filter: ['between', ['get', 'year'], ['var', 'minYear'], ['var', 'maxYear']],
+  style: {
+    'circle-radius': 8,
+    'circle-fill-color': 'blue',
+  },
+  source: vectorSource,
+})
+
+// After
+new WebGLVectorLayer({
+  style: [{
+    filter: ['between', ['get', 'year'], ['var', 'minYear'], ['var', 'maxYear']],
+    style: {
+      'circle-radius': 8,
+      'circle-fill-color': 'blue',
+    },
+  }],
+  source: vectorSource,
+})
+```
+
+#### ol-mapbox-style compatibility
+
+This version of OpenLayers is only compatible with `ol-mapbox-style@12.4.0` or higher.
+
+#### Returning false from a one-time listener added with `once`
+
+Returning false from the listener function will now stop propagation, when the listener is added with `once`.
+Previously this only worked with the `on` method.
+
+#### The `filter` option for `WebGLPointsLayer` has changed
+
+The filter option for the `WebGLPointsLayer` must now be specified alongside other options instead of being part of the `style` object. Note that the `WebGLPointsLayer` is not part of the stable API and is subject to breaking changes between major releases.
+
+```js
+// Before
+new WebGLPointsLayer({
+  style: {
+    filter: ['between', ['get', 'year'], ['var', 'minYear'], ['var', 'maxYear']],
+    'circle-radius': 8,
+    'circle-fill-color': 'blue',
+  },
+  source: vectorSource,
+})
+
+// Now
+new WebGLPointsLayer({
+  filter: ['between', ['get', 'year'], ['var', 'minYear'], ['var', 'maxYear']],
+  style: {
+    'circle-radius': 8,
+    'circle-fill-color': 'blue',
+  },
+  source: vectorSource,
+})
+```
+
+### 10.3.0
+
+#### The `transform` function throws for unknown projections
+
+Previously, the `transform()` function from the `ol/proj` module would apply the identity transform if either the source or the destination projections were unrecognized. Now this function will throw an error if it cannot perform the transform. You can check whether a projection is registered by calling the `get()` function from `ol/proj` - this function returns `null` if the projection definition for a provided identifier is not known.
+
+#### The format of the style for `WebGLPointsLayer` has changed
+
+Such a layer would previously be created this way:
+```js
+// Before
+new WebGLPointsLayer({
+  style: {
+    // variables were part of the `style` object
+    variables: {
+      minYear: 1850,
+      maxYear: 2015,
+    },
+    filter: ['between', ['get', 'year'], ['var', 'minYear'], ['var', 'maxYear']],
+  },
+  source: vectorSource,
+})
+```
+
+From this release on, **variables are now set as a separate object** at the root of the options object:
+```js
+// Now
+new WebGLPointsLayer({
+  style: {
+    filter: ['between', ['get', 'year'], ['var', 'minYear'], ['var', 'maxYear']],
+  },
+  variables: {
+    minYear: 1850,
+    maxYear: 2015,
+  },
+  source: vectorSource,
+})
+```
+
+### 10.2.0
+
+No changes should be needed to update to this release.  See the release changelog for new features and fixes.
+
+### 10.1.0
+
+No changes should be needed to update to this release.  See the release changelog for new features and fixes.
+
+### 10.0.0
+
+#### Backwards incompatible changes
+
+##### `ol/source/VectorTile`: `getFeaturesInExtent()` method moved to `ol/layer/VectorTile`
+
+The `getFeaturesInExtent()` method of `ol/source/VectorTile` has been moved to `ol/layer/VectorTile`. The signature and behavior have not changed, so all that needs to be done is change code from e.g.
+```js
+layer.getSource().getFeaturesInExtent(extent);
+```
+to
+```js
+layer.getFeaturesInExtent(extent);
+```
+
+##### Flat styles: Removal of Type hints in `'get'` expressions
+
+For the Canvas renderer, additional arguments to the `'get'` call expression now mean access to nested properties or array items. The expression system has been improved so type hints are no longer needed. If you were previously using a type hint in a `get` expression, you have to change the expression from e.g.
+```js
+['get', 'foo', 'number[]']
+```
+to
+```js
+['get', 'foo']
+```
+
+#### Other changes
+
+##### Removal of the `opaque` option from all `Tile` sources
+
+The `opaque` option was previously used to hint the renderer to perform some optimizations on layers known to be fully opaque. This is no longer needed, and the option has been removed.
+
+### 9.2.0
+
+#### The `snap` event's feature property is now never `null`
+
+Previously, listeners for the `Snap` interaction's `snap` event received `null` as value for the `feature` property when snapped to a segment. Now, the value of the `feature` property is always set to the snapped feature.
+
+To distinguish between a vertex and a segment snap, look at the `snap` event's `segment` property. It will set to `null` on a vertex snap, and to the snapped segment on a segment snap.
+
+### 9.1.0
+
+No special changes are required when upgrading to the 9.1.0 release.
+
+### 9.0.0
+
+#### Improved render order of decluttered items
+
+Decluttered items in Vector and VectorTile layers now maintain the render order of the layers and within a layer. They do not get lifted to a higher place in the stack any more.
+
+For most use cases, this is the desired behavior. If, however, you've been relying on the previous behavior, you now have to create separate layers above the layer stack, with just the styles for the declutter items.
+
+#### Removal of `Map#flushDeclutterItems()`
+
+It is no longer necessary to call this function to put layers above decluttered symbols and text, because decluttering no longer lifts elements above the layer stack.
+
+To upgrade, simply remove the code where you use the `flushDeclutterItems()` method.
+
+#### Changes in `ol/style`
+
+* Removed the `ol/style/RegularShape`'s `radius1` property. Use `radius` for regular polygons or `radius` and `radius2` for stars.
+* Removed the `shape-radius1` property from `ol/style/flat~FlatShape`. Use  `shape-radius` instead.
+
+#### `GeometryCollection` constructor
+
+`ol/geom/GeometryCollection` can no longer be created without providing a Geometry array. Empty arrays are still valid.
+
+#### `ol/interaction/Draw`
+
+* The `finishDrawing()` method now returns the drawn feature or `null` if no drawing could be finished. Previously it returned `undefined`.
+
+#### `ZoomToExtent` control in `useGeographic` mode
+
+The `ZoomToExtent` control now expects geographic coordinates when `useGeographic` is set. Before it expected coordinates in the projection of the map.
+
 ### 8.0.0
 
 #### Removal of deprecated properties and methods
